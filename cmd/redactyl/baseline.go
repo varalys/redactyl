@@ -5,8 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/accrava/redactyl/internal/engine"
-	"github.com/accrava/redactyl/internal/report"
+	"github.com/redactyl/redactyl/internal/engine"
+	"github.com/redactyl/redactyl/internal/report"
 	"github.com/spf13/cobra"
 )
 

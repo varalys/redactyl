@@ -1,6 +1,6 @@
 package detectors
 
-import "github.com/accrava/redactyl/internal/types"
+import "github.com/redactyl/redactyl/internal/types"
 
 type Detector func(path string, data []byte) []types.Finding
 

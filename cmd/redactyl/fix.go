@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/accrava/redactyl/internal/files"
-	"github.com/accrava/redactyl/internal/gitexec"
-	"github.com/accrava/redactyl/internal/redact"
+	"github.com/redactyl/redactyl/internal/files"
+	"github.com/redactyl/redactyl/internal/gitexec"
+	"github.com/redactyl/redactyl/internal/redact"
 	"github.com/spf13/cobra"
 )
 

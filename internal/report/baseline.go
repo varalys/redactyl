@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"os"
 
-	"github.com/accrava/redactyl/internal/types"
+	"github.com/redactyl/redactyl/internal/types"
 )
 
 type Baseline struct {

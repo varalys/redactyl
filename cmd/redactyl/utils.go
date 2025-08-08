@@ -23,8 +23,8 @@ func selfUpdate() error {
 	if err != nil {
 		ver = semver.MustParse("0.0.0")
 	}
-	// Update from GitHub Releases: accrava/redactyl
-	latest, err := selfupdate.UpdateSelf(semver3.MustParse(ver.String()), "accrava/redactyl")
+	// Update from GitHub Releases: redactyl/redactyl
+	latest, err := selfupdate.UpdateSelf(semver3.MustParse(ver.String()), "redactyl/redactyl")
 	if err != nil {
 		return err
 	}

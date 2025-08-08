@@ -1,5 +1,5 @@
 package main
 
-import "github.com/accrava/redactyl/cmd/redactyl"
+import "github.com/redactyl/redactyl/cmd/redactyl"
 
 func main() { redactyl.Execute() }

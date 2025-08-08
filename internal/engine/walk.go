@@ -7,35 +7,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/accrava/redactyl/internal/git"
-	"github.com/accrava/redactyl/internal/ignore"
+	"github.com/redactyl/redactyl/internal/git"
+	"github.com/redactyl/redactyl/internal/ignore"
 )
 
-type fileJob struct {
-	path string
-	data []byte
-}
-
-type workerPool struct {
-	ch   chan fileJob
-	done chan struct{}
-}
-
-func newWorkerPool(n int) *workerPool {
-	wp := &workerPool{ch: make(chan fileJob, n*2), done: make(chan struct{})}
-	for i := 0; i < n; i++ {
-		go func() {
-			for range wp.ch {
-			}
-		}()
-	}
-	return wp
-}
-func (w *workerPool) Submit(j fileJob) { w.ch <- j }
-func (w *workerPool) Wait()            { close(w.ch); <-w.done }
-
-func Walk(ctx context.Context, cfg Config, ign ignore.Matcher, wp *workerPool, handle func(path string, data []byte)) error {
-	defer close(wp.done)
+// Walk traverses the working tree and invokes handle for each eligible file.
+func Walk(ctx context.Context, cfg Config, ign ignore.Matcher, handle func(path string, data []byte)) error {
 	return filepath.WalkDir(cfg.Root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil

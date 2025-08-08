@@ -3,7 +3,7 @@ package redactyl
 import (
 	"fmt"
 
-	"github.com/accrava/redactyl/internal/engine"
+	"github.com/redactyl/redactyl/internal/engine"
 	"github.com/spf13/cobra"
 )
 

@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/accrava/redactyl/internal/types"
+	"github.com/redactyl/redactyl/internal/types"
 )
 
 // Twilio formats worth catching:

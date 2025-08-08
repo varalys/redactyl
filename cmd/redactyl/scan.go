@@ -7,11 +7,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/accrava/redactyl/internal/config"
-	"github.com/accrava/redactyl/internal/engine"
-	"github.com/accrava/redactyl/internal/report"
-	"github.com/accrava/redactyl/internal/types"
-	"github.com/accrava/redactyl/internal/update"
+	"github.com/redactyl/redactyl/internal/config"
+	"github.com/redactyl/redactyl/internal/engine"
+	"github.com/redactyl/redactyl/internal/report"
+	"github.com/redactyl/redactyl/internal/types"
+	"github.com/redactyl/redactyl/internal/update"
 	"github.com/spf13/cobra"
 )
 

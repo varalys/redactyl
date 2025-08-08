@@ -1,0 +1,43 @@
+name: Go Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      MIN_COVERAGE: "50.0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Run tests with race and coverage
+        run: |
+          go test -race -coverprofile=cover.out ./...
+          go tool cover -func=cover.out | tee cover.txt
+      - name: Enforce coverage threshold
+        run: |
+          total=$(grep -E '^total:' cover.txt | awk '{print $3}' | sed 's/%//')
+          awk -v t=$total -v m=$MIN_COVERAGE 'BEGIN { if (t+0 < m+0) { printf("Coverage %.1f%% is below minimum %.1f%%\n", t, m); exit 1 } else { printf("Coverage %.1f%% meets minimum %.1f%%\n", t, m); } }'
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: |
+            cover.out
+            cover.txt
+

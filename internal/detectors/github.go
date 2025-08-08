@@ -5,7 +5,7 @@ import (
 	"bytes"
 	"regexp"
 
-	"github.com/accrava/redactyl/internal/types"
+	"github.com/redactyl/redactyl/internal/types"
 )
 
 // PAT formats evolve; this covers classic ghp_ tokens.

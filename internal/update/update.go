@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	repoLatestURL = "https://api.github.com/repos/accrava/redactyl/releases/latest"
+	repoLatestURL = "https://api.github.com/repos/redactyl/redactyl/releases/latest"
 	cacheFileName = "update.json"
 )
 

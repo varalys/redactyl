@@ -5,7 +5,7 @@ import (
 	"bytes"
 	"regexp"
 
-	"github.com/accrava/redactyl/internal/types"
+	"github.com/redactyl/redactyl/internal/types"
 )
 
 var reJWT = regexp.MustCompile(`eyJ[A-Za-z0-9_-]+?\.[A-Za-z0-9._-]+?\.[A-Za-z0-9._-]+`)

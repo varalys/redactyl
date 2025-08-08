@@ -6,14 +6,17 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
-	"github.com/accrava/redactyl/internal/cache"
-	"github.com/accrava/redactyl/internal/detectors"
-	"github.com/accrava/redactyl/internal/git"
-	"github.com/accrava/redactyl/internal/ignore"
-	"github.com/accrava/redactyl/internal/types"
 	xxhash "github.com/cespare/xxhash/v2"
+	"github.com/redactyl/redactyl/internal/cache"
+	"github.com/redactyl/redactyl/internal/detectors"
+	"github.com/redactyl/redactyl/internal/git"
+	"github.com/redactyl/redactyl/internal/ignore"
+	"github.com/redactyl/redactyl/internal/types"
+	"golang.org/x/sync/errgroup"
 )
 
 type Config struct {
@@ -71,7 +74,7 @@ func ScanWithStats(cfg Config) (Result, error) {
 	if threads <= 0 {
 		threads = runtime.GOMAXPROCS(0)
 	}
-	pool := newWorkerPool(threads)
+	// working tree processing is done inline via Walk; staged/base/history use bounded parallelism
 
 	ign, _ := ignore.Load(filepath.Join(cfg.Root, ".redactylignore"))
 	ctx := context.Background()
@@ -84,7 +87,7 @@ func ScanWithStats(cfg Config) (Result, error) {
 
 	// working tree / staged
 	if cfg.HistoryCommits == 0 && cfg.BaseBranch == "" {
-		err := Walk(ctx, cfg, ign, pool, func(p string, data []byte) {
+		err := Walk(ctx, cfg, ign, func(p string, data []byte) {
 			// compute cheap content hash; small overhead but enables skipping next run
 			h := fastHash(data)
 			if !cfg.NoCache && db.Entries != nil && db.Entries[p] == h {
@@ -110,31 +113,69 @@ func ScanWithStats(cfg Config) (Result, error) {
 		}
 	}
 
-	// staged
+	// staged (parallel)
 	if cfg.ScanStaged {
 		files, data, err := git.StagedDiff(cfg.Root)
 		if err == nil {
+			var scanned int64
+			var mu sync.Mutex
+			g, _ := errgroup.WithContext(context.Background())
+			g.SetLimit(threads)
+
+			findingsCh := make(chan []types.Finding, threads*2)
+			done := make(chan struct{})
+			go func() {
+				for fs := range findingsCh {
+					emit(fs)
+				}
+				close(done)
+			}()
+
 			for i, p := range files {
-				result.FilesScanned++
-				fs := detectors.RunAll(p, data[i])
-				fs = filterByConfidence(fs, cfg.MinConfidence)
-				fs = filterByIDs(fs, cfg.EnableDetectors, cfg.DisableDetectors)
-				emit(fs)
-				if !cfg.NoCache {
-					updated[p] = fastHash(data[i])
-				}
-				result.FilesScanned++
-				if cfg.Progress != nil {
-					cfg.Progress()
-				}
+				i, p := i, p
+				g.Go(func() error {
+					if cfg.MaxBytes > 0 && int64(len(data[i])) > cfg.MaxBytes {
+						return nil
+					}
+					atomic.AddInt64(&scanned, 1)
+					if cfg.DryRun {
+						if cfg.Progress != nil {
+							cfg.Progress()
+						}
+						return nil
+					}
+					fs := detectors.RunAll(p, data[i])
+					fs = filterByConfidence(fs, cfg.MinConfidence)
+					fs = filterByIDs(fs, cfg.EnableDetectors, cfg.DisableDetectors)
+					findingsCh <- fs
+					if !cfg.NoCache {
+						h := fastHash(data[i])
+						mu.Lock()
+						updated[p] = h
+						mu.Unlock()
+					}
+					if cfg.Progress != nil {
+						cfg.Progress()
+					}
+					return nil
+				})
 			}
+			_ = g.Wait()
+			close(findingsCh)
+			<-done
+			result.FilesScanned += int(scanned)
 		}
 	}
 
-	// history
+	// history (parallel)
 	if cfg.HistoryCommits > 0 {
 		entries, err := git.LastNCommits(cfg.Root, cfg.HistoryCommits)
 		if err == nil {
+			type pair struct {
+				path string
+				blob []byte
+			}
+			var items []pair
 			for _, e := range entries {
 				for path, blob := range e.Files {
 					if ign.Match(path) {
@@ -143,57 +184,109 @@ func ScanWithStats(cfg Config) (Result, error) {
 					if int64(len(blob)) > cfg.MaxBytes {
 						continue
 					}
-					result.FilesScanned++
+					items = append(items, pair{path: path, blob: blob})
+				}
+			}
+			var scanned int64
+			var mu sync.Mutex
+			g, _ := errgroup.WithContext(context.Background())
+			g.SetLimit(threads)
+			findingsCh := make(chan []types.Finding, threads*2)
+			done := make(chan struct{})
+			go func() {
+				for fs := range findingsCh {
+					emit(fs)
+				}
+				close(done)
+			}()
+			for _, it := range items {
+				it := it
+				g.Go(func() error {
+					atomic.AddInt64(&scanned, 1)
 					if cfg.DryRun {
-						continue
+						if cfg.Progress != nil {
+							cfg.Progress()
+						}
+						return nil
 					}
-					fs := detectors.RunAll(path, blob)
+					fs := detectors.RunAll(it.path, it.blob)
 					fs = filterByConfidence(fs, cfg.MinConfidence)
 					fs = filterByIDs(fs, cfg.EnableDetectors, cfg.DisableDetectors)
-					emit(fs)
+					findingsCh <- fs
 					if !cfg.NoCache {
-						updated[path] = fastHash(blob)
+						h := fastHash(it.blob)
+						mu.Lock()
+						updated[it.path] = h
+						mu.Unlock()
 					}
-					result.FilesScanned++
 					if cfg.Progress != nil {
 						cfg.Progress()
 					}
-				}
+					return nil
+				})
 			}
+			_ = g.Wait()
+			close(findingsCh)
+			<-done
+			result.FilesScanned += int(scanned)
 		}
 	}
 
-	// diff vs base branch
+	// diff vs base branch (parallel)
 	if cfg.BaseBranch != "" {
 		files, data, err := git.DiffAgainst(cfg.Root, cfg.BaseBranch)
 		if err == nil {
+			var scanned int64
+			var mu sync.Mutex
+			g, _ := errgroup.WithContext(context.Background())
+			g.SetLimit(threads)
+			findingsCh := make(chan []types.Finding, threads*2)
+			done := make(chan struct{})
+			go func() {
+				for fs := range findingsCh {
+					emit(fs)
+				}
+				close(done)
+			}()
 			for i, p := range files {
-				if ign.Match(p) {
-					continue
-				}
-				if int64(len(data[i])) > cfg.MaxBytes {
-					continue
-				}
-				result.FilesScanned++
-				if cfg.DryRun {
-					continue
-				}
-				fs := detectors.RunAll(p, bytes.TrimSpace(data[i]))
-				fs = filterByConfidence(fs, cfg.MinConfidence)
-				fs = filterByIDs(fs, cfg.EnableDetectors, cfg.DisableDetectors)
-				emit(fs)
-				if !cfg.NoCache {
-					updated[p] = fastHash(data[i])
-				}
-				result.FilesScanned++
-				if cfg.Progress != nil {
-					cfg.Progress()
-				}
+				i, p := i, p
+				g.Go(func() error {
+					if ign.Match(p) {
+						return nil
+					}
+					if cfg.MaxBytes > 0 && int64(len(data[i])) > cfg.MaxBytes {
+						return nil
+					}
+					atomic.AddInt64(&scanned, 1)
+					if cfg.DryRun {
+						if cfg.Progress != nil {
+							cfg.Progress()
+						}
+						return nil
+					}
+					fs := detectors.RunAll(p, bytes.TrimSpace(data[i]))
+					fs = filterByConfidence(fs, cfg.MinConfidence)
+					fs = filterByIDs(fs, cfg.EnableDetectors, cfg.DisableDetectors)
+					findingsCh <- fs
+					if !cfg.NoCache {
+						h := fastHash(data[i])
+						mu.Lock()
+						updated[p] = h
+						mu.Unlock()
+					}
+					if cfg.Progress != nil {
+						cfg.Progress()
+					}
+					return nil
+				})
 			}
+			_ = g.Wait()
+			close(findingsCh)
+			<-done
+			result.FilesScanned += int(scanned)
 		}
 	}
 
-	pool.Wait()
 	result.Findings = out
 	result.Duration = time.Since(started)
 	// Save cache best-effort

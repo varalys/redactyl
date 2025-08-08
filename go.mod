@@ -1,4 +1,4 @@
-module github.com/accrava/redactyl
+module github.com/redactyl/redactyl
 
 go 1.24.5
 
@@ -9,6 +9,7 @@ require (
 	github.com/go-git/go-git/v5 v5.16.2
 	github.com/rhysd/go-github-selfupdate v1.2.3
 	github.com/spf13/cobra v1.9.1
+	golang.org/x/sync v0.16.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 

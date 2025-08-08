@@ -6,7 +6,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/accrava/redactyl/internal/types"
+	"github.com/redactyl/redactyl/internal/types"
 )
 
 type sarif struct {
