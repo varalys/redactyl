@@ -34,6 +34,8 @@ func TestNormalizeAndCompare(t *testing.T) {
 }
 
 func TestCheck_UsesCacheWhenFresh(t *testing.T) {
+	// Ensure CI short-circuit is disabled for this test
+	t.Setenv("CI", "")
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
 	c := cache{LastChecked: time.Now(), Latest: "1.2.3"}
