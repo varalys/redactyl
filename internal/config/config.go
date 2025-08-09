@@ -8,6 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// FileConfig is the on-disk YAML configuration shape for Redactyl.
 type FileConfig struct {
 	Include         *string  `yaml:"include"`
 	Exclude         *string  `yaml:"exclude"`
@@ -20,6 +21,7 @@ type FileConfig struct {
 	DefaultExcludes *bool    `yaml:"default_excludes"`
 }
 
+// LoadFile reads a YAML config file from the provided path.
 func LoadFile(path string) (FileConfig, error) {
 	var cfg FileConfig
 	b, err := os.ReadFile(path)
@@ -32,6 +34,8 @@ func LoadFile(path string) (FileConfig, error) {
 	return cfg, nil
 }
 
+// LoadLocal searches for a repo-local config file in the given root.
+// It supports .redactyl.yml/.yaml and redactyl.yml/.yaml.
 func LoadLocal(repoRoot string) (FileConfig, error) {
 	var cfg FileConfig
 	for _, name := range []string{".redactyl.yml", ".redactyl.yaml", "redactyl.yml", "redactyl.yaml"} {
@@ -43,6 +47,7 @@ func LoadLocal(repoRoot string) (FileConfig, error) {
 	return cfg, errors.New("no local config")
 }
 
+// LoadGlobal loads the global config file from XDG base directory or ~/.config.
 func LoadGlobal() (FileConfig, error) {
 	var cfg FileConfig
 	base := os.Getenv("XDG_CONFIG_HOME")

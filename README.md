@@ -249,6 +249,8 @@ no_color: false
   - Findings: `docs/schemas/findings.schema.json`
   - Upload envelope: `docs/schemas/upload-envelope.schema.json`
 
+See also: `docs/enterprise.md` for integration options.
+
 ### SARIF viewer
 ```sh
 ./bin/redactyl sarif view redactyl.sarif.json
@@ -318,12 +320,13 @@ jobs:
 ./bin/redactyl version
 ```
 
-### Updates
+### Updates & Changelog
 - Check for a newer version is displayed on scan (can be disabled via flags/config).
 - Update in-place from GitHub Releases:
   ```sh
   ./bin/redactyl update
   ```
+ - See `CHANGELOG.md` for notable changes.
 
 ### License
 - Apache-2.0. See [`LICENSE`](LICENSE).

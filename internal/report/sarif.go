@@ -67,6 +67,7 @@ func sevToLevel(s types.Severity) string {
 	}
 }
 
+// WriteSARIF writes findings as SARIF 2.1.0 to the provided writer.
 func WriteSARIF(w io.Writer, findings []types.Finding) error {
 	run := sarifRun{
 		Tool: sarifTool{Driver: sarifDriver{Name: "redactyl", Version: time.Now().Format("2006.01.02")}},
