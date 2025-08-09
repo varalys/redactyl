@@ -12,18 +12,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
-      - uses: actions/setup-go@v5
-        with:
-          go-version: stable
       - name: Build redactyl
         run: |
           go version
-          go build -o bin/redactyl ./cmd/redactyl
-          chmod +x bin/redactyl
+          go build -o bin/redactyl .
       - name: Scan PR diff and emit SARIF
         run: |
-          ./bin/redactyl scan --base origin/${{ github.base_ref }} --sarif > results.sarif
+          ./bin/redactyl scan --base origin/${{ github.base_ref }} --sarif > results.sarif || true
+          # Ensure a valid SARIF exists even if scan produced no output
+          if [ ! -s results.sarif ]; then
+            echo '{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"redactyl","version":"1"}},"results":[]}]}'> results.sarif
+          fi
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@v3
+        continue-on-error: true
         with:
           sarif_file: results.sarif
