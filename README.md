@@ -233,6 +233,22 @@ no_color: false
 - JSON: machine-readable; never returns null array
 - SARIF 2.1.0: for code scanning dashboards
 
+### Public facade (for integrations)
+- Stable API surface for external consumers:
+  - Import `github.com/franzer/redactyl/pkg/core`
+  - Types: `core.Config`, `core.Finding`
+  - Entry: `core.Scan(cfg)`
+
+### Enterprise upload (optional)
+- Upload findings JSON after a scan:
+  ```sh
+  redactyl scan --json --upload https://enterprise.example/api/v1/findings --upload-token $REDACTYL_TOKEN
+  ```
+- Envelope fields: `tool`, `version`, `schema_version`, optional `repo|commit|branch`, and `findings`.
+- Schemas:
+  - Findings: `docs/schemas/findings.schema.json`
+  - Upload envelope: `docs/schemas/upload-envelope.schema.json`
+
 ### SARIF viewer
 ```sh
 ./bin/redactyl sarif view redactyl.sarif.json
@@ -309,7 +325,18 @@ jobs:
   ./bin/redactyl update
   ```
 
-License, contribution guidelines, and detailed examples can be added here if needed.
+### License
+- Apache-2.0. See [`LICENSE`](LICENSE).
+
+### Contributing
+- See [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+### Enterprise
+- Commercial offerings (dashboard, org policies, PR gating, SSO, hosted option) are available.
+- Options:
+  - Upload from OSS CLI to your server: `--json --upload` (see schemas in `docs/schemas/`).
+  - Or run scans in Enterprise workers via `github.com/franzer/redactyl/pkg/core`.
+- Inquiries: open a GitHub Discussion (Q&A) titled "Enterprise inquiry" or reach out via the repo owner's profile.
 
 ---
 
