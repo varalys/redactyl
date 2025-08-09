@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/franzer/redactyl/docs/schemas/upload-envelope.schema.json",
+  "title": "Redactyl Upload Envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "tool": {"type": "string", "const": "redactyl"},
+    "version": {"type": "string"},
+    "schema_version": {"type": "string", "const": "1"},
+    "repo": {"type": "string"},
+    "commit": {"type": "string"},
+    "branch": {"type": "string"},
+    "findings": {
+      "$ref": "./findings.schema.json"
+    }
+  },
+  "required": ["tool", "version", "schema_version", "findings"]
+}
+
+

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/franzer/redactyl/docs/schemas/findings.schema.json",
+  "title": "Redactyl Findings",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "path": {"type": "string"},
+      "line": {"type": "integer", "minimum": 0},
+      "match": {"type": "string"},
+      "detector": {"type": "string"},
+      "severity": {"type": "string", "enum": ["low", "medium", "high"]},
+      "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+    },
+    "required": ["path", "line", "match", "detector", "severity", "confidence"]
+  }
+}
+
+

@@ -16,16 +16,18 @@ import (
 )
 
 var (
-	flagPath     string
-	flagStaged   bool
-	flagHistory  int
-	flagBase     string
-	flagInclude  string
-	flagExclude  string
-	flagMaxBytes int64
-	flagEnable   string
-	flagDisable  string
-	flagGuide    bool
+	flagPath        string
+	flagStaged      bool
+	flagHistory     int
+	flagBase        string
+	flagInclude     string
+	flagExclude     string
+	flagMaxBytes    int64
+	flagEnable      string
+	flagDisable     string
+	flagGuide       bool
+	flagUploadURL   string
+	flagUploadToken string
 )
 
 func init() {
@@ -46,6 +48,8 @@ func init() {
 	cmd.Flags().StringVar(&flagEnable, "enable", "", "only run these detectors (comma-separated IDs)")
 	cmd.Flags().StringVar(&flagDisable, "disable", "", "disable these detectors (comma-separated IDs)")
 	cmd.Flags().BoolVar(&flagGuide, "guide", false, "print suggested remediation commands for findings")
+	cmd.Flags().StringVar(&flagUploadURL, "upload", "", "POST findings (JSON) to this URL after scan")
+	cmd.Flags().StringVar(&flagUploadToken, "upload-token", "", "Bearer token for upload auth")
 }
 
 func runScan(cmd *cobra.Command, _ []string) error {
@@ -143,6 +147,13 @@ func runScan(cmd *cobra.Command, _ []string) error {
 				// otherwise suggest redact for the match span and path-based removal if binary/secret files
 				fmt.Fprintln(os.Stderr, "  redactyl fix redact --file", f.Path, "--pattern", "'"+regexpQuote(f.Match)+"'", "--replace '<redacted>' --summary remediation.json")
 			}
+		}
+	}
+
+	// Optional upload step: do not fail the scan on upload errors
+	if flagUploadURL != "" {
+		if err := uploadFindings(flagUploadURL, flagUploadToken, convertFindings(newFindings)); err != nil {
+			fmt.Fprintln(os.Stderr, "upload warning:", err)
 		}
 	}
 
