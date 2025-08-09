@@ -336,7 +336,7 @@ jobs:
 - Options:
   - Upload from OSS CLI to your server: `--json --upload` (see schemas in `docs/schemas/`).
   - Or run scans in Enterprise workers via `github.com/franzer/redactyl/pkg/core`.
-- Inquiries: open a GitHub Discussion (Q&A) titled "Enterprise inquiry" or reach out via the repo owner's profile.
+- Inquiries: open a GitHub Discussion (Q&A) titled "Enterprise inquiry".
 
 ---
 
