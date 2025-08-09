@@ -5,16 +5,23 @@ on:
 jobs:
   scan:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
       - name: Build redactyl
         run: |
           go version
           go build -o bin/redactyl ./cmd/redactyl
       - name: Scan PR diff and emit SARIF
         run: |
-          ./bin/redactyl -base origin/${{ github.base_ref }} --sarif > results.sarif || echo "scan status captured"
+          ./bin/redactyl scan --base ${{ github.base_ref }} --sarif > results.sarif
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@v3
         with:
