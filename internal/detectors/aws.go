@@ -5,7 +5,7 @@ import (
 	"bytes"
 	"regexp"
 
-	"github.com/redactyl/redactyl/internal/types"
+	"github.com/franzer/redactyl/internal/types"
 )
 
 var (

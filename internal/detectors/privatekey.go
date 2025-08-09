@@ -5,7 +5,7 @@ import (
 	"bytes"
 	"strings"
 
-	"github.com/redactyl/redactyl/internal/types"
+	"github.com/franzer/redactyl/internal/types"
 )
 
 func PrivateKeyBlock(path string, data []byte) []types.Finding {

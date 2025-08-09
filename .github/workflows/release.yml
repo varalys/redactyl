@@ -14,6 +14,9 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: stable
+      - name: Install NFPM (deb/rpm/apk)
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/goreleaser/nfpm/master/scripts/install.sh | sh -s -- -b /usr/local/bin
       - name: GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:

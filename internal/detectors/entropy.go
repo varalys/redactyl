@@ -6,7 +6,7 @@ import (
 	"math"
 	"regexp"
 
-	"github.com/redactyl/redactyl/internal/types"
+	"github.com/franzer/redactyl/internal/types"
 )
 
 var reMaybeSecret = regexp.MustCompile(`[A-Za-z0-9+/=_-]{20,}`) // broad token-ish

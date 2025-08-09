@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/redactyl/redactyl/internal/types"
+	"github.com/franzer/redactyl/internal/types"
 )
 
 var reStripe = regexp.MustCompile(`sk_live_[A-Za-z0-9]{24,}`)

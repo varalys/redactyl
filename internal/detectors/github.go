@@ -5,11 +5,11 @@ import (
 	"bytes"
 	"regexp"
 
-	"github.com/redactyl/redactyl/internal/types"
+	"github.com/franzer/redactyl/internal/types"
 )
 
-// PAT formats evolve; this covers classic ghp_ tokens.
-var reGHP = regexp.MustCompile(`ghp_[A-Za-z0-9]{36}`)
+// PAT formats evolve; cover ghp_, gho_, ghu_, ghs_, ghr_
+var reGHP = regexp.MustCompile(`g(hp|ho|hu|hs|hr)_[A-Za-z0-9]{36}`)
 
 func GitHubToken(path string, data []byte) []types.Finding {
 	var out []types.Finding

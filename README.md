@@ -1,5 +1,11 @@
 ## Redactyl
 
+![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)
+
+[![Tests](https://github.com/franzer/redactyl/actions/workflows/test.yml/badge.svg)](https://github.com/franzer/redactyl/actions/workflows/test.yml)
+[![Lint](https://github.com/franzer/redactyl/actions/workflows/lint.yml/badge.svg)](https://github.com/franzer/redactyl/actions/workflows/lint.yml)
+[![Vuln](https://github.com/franzer/redactyl/actions/workflows/vuln.yml/badge.svg)](https://github.com/franzer/redactyl/actions/workflows/vuln.yml)
+
 Find secrets in your repo with low noise. Redactyl scans your working tree, staged changes, diffs, or history and reports likely credentials and tokens.
 
 ### Features
@@ -32,22 +38,52 @@ Find secrets in your repo with low noise. Redactyl scans your working tree, stag
   go install .  # installs to $(go env GOBIN) or $(go env GOPATH)/bin
   ```
 
+- Install globally (recommended):
+  ```sh
+  go install github.com/franzer/redactyl@latest
+  # then use the binary directly if your GOBIN is on PATH
+  redactyl --help
+  ```
+
+- DEB/RPM/APK (after first release): download from Releases and install via your package manager.
+
+- Tip: to use the locally built binary without typing ./bin/, add it to PATH for this shell:
+  ```sh
+  export PATH="$PWD/bin:$PATH"
+  ```
+
 ### Quick start
 - Default scan:
   ```sh
   ./bin/redactyl scan
   ```
+  If installed globally:
+  ```sh
+  redactyl scan
+  ```
 - With guidance (suggested remediation commands):
   ```sh
   ./bin/redactyl scan --guide
+  ```
+  If installed globally:
+  ```sh
+  redactyl scan --guide
   ```
 - JSON:
   ```sh
   ./bin/redactyl scan --json
   ```
+  If installed globally:
+  ```sh
+  redactyl scan --json
+  ```
 - SARIF:
   ```sh
   ./bin/redactyl scan --sarif > redactyl.sarif.json
+  ```
+  If installed globally:
+  ```sh
+  redactyl scan --sarif > redactyl.sarif.json
   ```
 - Staged changes only:
   ```sh
@@ -72,6 +108,30 @@ Find secrets in your repo with low noise. Redactyl scans your working tree, stag
   2) Local file: `.redactyl.yml` at repo root
   3) Global file: `~/.config/redactyl/config.yml`
 - Fields include `include`, `exclude`, `maxBytes`, `threads`, `enable`, `disable`, `minConfidence`, `noColor`, etc.
+
+#### Generate a config
+- Create a starter config with all detectors enabled (default preset is standard):
+  ```sh
+  ./bin/redactyl config init
+  ```
+- Minimal preset (critical detectors only):
+  ```sh
+  ./bin/redactyl config init --preset minimal --min-confidence 0.85
+  ```
+- Custom selection via `--enable`/`--disable`:
+  ```sh
+  ./bin/redactyl config init --enable "aws_access_key,aws_secret_key,private_key_block,github_token,openai_api_key"
+  ```
+
+Example `.redactyl.yml`:
+```yaml
+enable: aws_access_key,aws_secret_key,private_key_block,github_token,jwt
+max_bytes: 1048576
+threads: 0
+min_confidence: 0.85
+default_excludes: true
+no_color: false
+```
 
 ### Baseline
 - Update the baseline from the current scan results:
@@ -145,10 +205,28 @@ Find secrets in your repo with low noise. Redactyl scans your working tree, stag
   - private_key_block
   - entropy_context
   - stripe_secret
+  - stripe_webhook_secret
+  - mailgun_api_key
+  - postgres_uri_creds
+  - mysql_uri_creds
+  - mongodb_uri_creds
+  - azure_storage_key
+  - terraform_cloud_token
+  - heroku_api_key
+  - sentry_dsn
+  - firebase_api_key
   - twilio_account_sid
   - twilio_api_key_sid
   - twilio_auth_token
   - twilio_api_key_secret_like
+  - google_api_key
+  - gitlab_token
+  - sendgrid_api_key
+  - slack_webhook
+  - discord_webhook
+  - openai_api_key
+  - npm_token
+  - gcp_service_account_key
 
 ### Output formats
 - Table (default): human-friendly summary
@@ -168,6 +246,7 @@ Find secrets in your repo with low noise. Redactyl scans your working tree, stag
 - `./bin/redactyl hook --help`
 - `./bin/redactyl action --help`
 - `./bin/redactyl update --help`
+- `./bin/redactyl completion --help`
 
 ### Common scan flags
 - **--path, -p**: path to scan (default: .)
@@ -236,5 +315,5 @@ License, contribution guidelines, and detailed examples can be added here if nee
 
 Badges
 
-![Tests](https://github.com/redactyl/redactyl/actions/workflows/test.yml/badge.svg)
-![Release](https://github.com/redactyl/redactyl/actions/workflows/release.yml/badge.svg)
+![Tests](https://github.com/franzer/redactyl/actions/workflows/test.yml/badge.svg)
+![Release](https://github.com/franzer/redactyl/actions/workflows/release.yml/badge.svg)

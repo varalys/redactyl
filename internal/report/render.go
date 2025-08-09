@@ -6,7 +6,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/redactyl/redactyl/internal/types"
+	"github.com/franzer/redactyl/internal/types"
 )
 
 type PrintOptions struct {

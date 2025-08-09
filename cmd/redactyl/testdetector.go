@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/redactyl/redactyl/internal/detectors"
-	"github.com/redactyl/redactyl/internal/report"
+	"github.com/franzer/redactyl/internal/detectors"
+	"github.com/franzer/redactyl/internal/report"
 	"github.com/spf13/cobra"
 )
 

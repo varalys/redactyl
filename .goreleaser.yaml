@@ -42,8 +42,21 @@ changelog:
 
 release:
   github:
-    owner: redactyl
+    owner: franzer
     name: redactyl
   draft: false
   prerelease: auto
+
+nfpms:
+  - id: default
+    package_name: redactyl
+    formats: [deb, rpm, apk]
+    maintainer: Franz <you@example.com>
+    description: Find secrets in your repo with low noise.
+    license: Apache-2.0
+    homepage: https://github.com/franzer/redactyl
+    section: utils
+    priority: optional
+    contents: []
+    bindir: /usr/bin
 

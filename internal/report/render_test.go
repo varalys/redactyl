@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/redactyl/redactyl/internal/types"
+	"github.com/franzer/redactyl/internal/types"
 )
 
 func TestPrintTable_NoFindings_ShowsFooter(t *testing.T) {

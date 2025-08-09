@@ -1,11 +1,13 @@
 package detectors
 
-import "github.com/redactyl/redactyl/internal/types"
+import "github.com/franzer/redactyl/internal/types"
 
 type Detector func(path string, data []byte) []types.Finding
 
 var all = []Detector{
 	AWSKeys, GitHubToken, SlackToken, JWTToken, PrivateKeyBlock, EntropyNearbySecrets, StripeSecret, Twilio,
+	GoogleAPIKey, GitLabToken, SendGridAPIKey, SlackWebhookURL, DiscordWebhookURL, OpenAIAPIKey, NPMToken, StripeWebhookSecret, GCPServiceAccountKey,
+	MailgunAPIKey, DBURIs, AzureStorageKey, TerraformCloudToken, HerokuAPIKey, SentryDSN, FirebaseAPIKey,
 }
 
 func RunAll(path string, data []byte) []types.Finding {
@@ -26,10 +28,28 @@ func IDs() []string {
 		"private_key_block",
 		"entropy_context",
 		"stripe_secret",
+		"stripe_webhook_secret",
 		"twilio_account_sid",
 		"twilio_api_key_sid",
 		"twilio_auth_token",
 		"twilio_api_key_secret_like",
+		"google_api_key",
+		"gitlab_token",
+		"sendgrid_api_key",
+		"slack_webhook",
+		"discord_webhook",
+		"openai_api_key",
+		"npm_token",
+		"gcp_service_account_key",
+		"mailgun_api_key",
+		"postgres_uri_creds",
+		"mysql_uri_creds",
+		"mongodb_uri_creds",
+		"azure_storage_key",
+		"terraform_cloud_token",
+		"heroku_api_key",
+		"sentry_dsn",
+		"firebase_api_key",
 	}
 }
 
@@ -43,10 +63,25 @@ var funcByID = map[string]Detector{
 	"entropy":    EntropyNearbySecrets,
 	"stripe":     StripeSecret,
 	"twilio":     Twilio,
+	"google":     GoogleAPIKey,
+	"gitlab":     GitLabToken,
+	"sendgrid":   SendGridAPIKey,
+	"slackweb":   SlackWebhookURL,
+	"discord":    DiscordWebhookURL,
+	"openai":     OpenAIAPIKey,
+	"npm":        NPMToken,
+	"gcp":        GCPServiceAccountKey,
+	"mailgun":    MailgunAPIKey,
+	"dburi":      DBURIs,
+	"azure":      AzureStorageKey,
+	"tfc":        TerraformCloudToken,
+	"heroku":     HerokuAPIKey,
+	"sentry":     SentryDSN,
+	"firebase":   FirebaseAPIKey,
 }
 
 func FunctionIDs() []string {
-	return []string{"aws", "github", "slack", "jwt", "privatekey", "entropy", "stripe", "twilio"}
+	return []string{"aws", "github", "slack", "jwt", "privatekey", "entropy", "stripe", "twilio", "google", "gitlab", "sendgrid", "slackweb", "discord", "openai", "npm", "gcp", "mailgun", "dburi", "azure", "tfc", "heroku", "sentry", "firebase"}
 }
 
 func RunFunction(id, path string, data []byte) []types.Finding {
