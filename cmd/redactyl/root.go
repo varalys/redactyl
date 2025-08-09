@@ -23,6 +23,7 @@ var (
 	version = "0.1.0"
 )
 
+// rootCmd is the base Cobra command for the Redactyl CLI.
 var rootCmd = &cobra.Command{
 	Use:           "redactyl",
 	Short:         "Find secrets in your repo",
@@ -31,6 +32,7 @@ var rootCmd = &cobra.Command{
 	SilenceErrors: true,
 }
 
+// Execute runs the Redactyl CLI. It should be called by the main package.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)

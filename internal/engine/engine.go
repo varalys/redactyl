@@ -19,6 +19,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// Config controls scanning behavior including scope, performance, and filters.
 type Config struct {
 	Root             string
 	IncludeGlobs     string
@@ -43,8 +44,10 @@ var (
 	DisableDetectors string
 )
 
+// DetectorIDs returns the list of available detector IDs.
 func DetectorIDs() []string { return detectors.IDs() }
 
+// Scan runs a scan and returns only findings (without stats).
 func Scan(cfg Config) ([]types.Finding, error) {
 	res, err := ScanWithStats(cfg)
 	if err != nil {
@@ -53,12 +56,14 @@ func Scan(cfg Config) ([]types.Finding, error) {
 	return res.Findings, nil
 }
 
+// Result contains findings and basic scan statistics.
 type Result struct {
 	Findings     []types.Finding
 	FilesScanned int
 	Duration     time.Duration
 }
 
+// ScanWithStats runs a scan and returns findings along with timing and counts.
 func ScanWithStats(cfg Config) (Result, error) {
 	var result Result
 	// Load incremental cache if available

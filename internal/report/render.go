@@ -9,12 +9,15 @@ import (
 	"github.com/franzer/redactyl/internal/types"
 )
 
+// PrintOptions controls table rendering and summary stats for PrintTable.
 type PrintOptions struct {
 	NoColor      bool
 	Duration     time.Duration
 	FilesScanned int
 }
 
+// PrintTable renders findings as a simple human-readable table and emits a
+// summary footer containing counts and optional duration/files scanned.
 func PrintTable(w io.Writer, findings []types.Finding, opts PrintOptions) {
 	sort.Slice(findings, func(i, j int) bool {
 		if findings[i].Path == findings[j].Path {
