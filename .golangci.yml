@@ -2,8 +2,6 @@ run:
   timeout: 5m
   tests: true
   modules-download-mode: vendor
-  skip-dirs:
-    - vendor
   allow-parallel-runners: true
 
 linters:
@@ -44,6 +42,8 @@ linters-settings:
 
 issues:
   exclude-use-default: false
+  exclude-dirs:
+    - vendor
   exclude-rules:
     - path: _test\.go
       linters:
