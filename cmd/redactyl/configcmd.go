@@ -53,7 +53,30 @@ func runConfigInit(_ *cobra.Command, _ []string) error {
 		switch strings.ToLower(cfgPreset) {
 		case "minimal":
 			enable = strings.Join([]string{
-				"aws_access_key", "aws_secret_key", "private_key_block", "github_token", "jwt",
+				// Keys & certificates
+				"private_key_block",
+				"aws_access_key", "aws_secret_key", "gcp_service_account_key", "azure_storage_key",
+				// Dev platform tokens
+				"github_token", "gitlab_token", "npm_token",
+				// AI providers (clear prefixes)
+				"openai_api_key", "anthropic_api_key", "groq_api_key", "replicate_api_token", "openrouter_api_key",
+				// AI tooling & vector DBs
+				"huggingface_token", "wandb_api_key", "kaggle_json_key",
+				"pinecone_api_key", "weaviate_api_key", "qdrant_api_key",
+				// Messaging & webhooks
+				"slack_webhook", "discord_webhook", "discord_bot_token", "telegram_bot_token",
+				// Database and broker URIs with creds
+				"postgres_uri_creds", "mysql_uri_creds", "mongodb_uri_creds", "sqlserver_uri_creds", "redis_uri_creds", "amqp_uri_creds",
+				// Payments & email
+				"stripe_secret", "stripe_webhook_secret", "mailgun_api_key", "sendgrid_api_key",
+				// Cloud & infra services
+				"terraform_cloud_token", "heroku_api_key", "cloudflare_token", "datadog_api_key", "datadog_app_key", "snyk_token", "databricks_pat", "shopify_token", "notion_api_key", "pypi_token",
+				// URL-style tokens
+				"azure_sas_token", "cloudinary_url_creds",
+				// File-format leaks
+				"npmrc_auth_token", "rubygems_credentials", "docker_config_auth", "git_credentials_url_secret",
+				// Keep JWT for backward compat minimal expectations
+				"jwt",
 			}, ",")
 		case "maximal":
 			ids := detectors.IDs()

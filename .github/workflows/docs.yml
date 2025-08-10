@@ -1,0 +1,26 @@
+name: Docs
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  gendocs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+      - name: Generate detectors docs
+        run: |
+          go build -o bin/redactyl .
+          ./bin/redactyl gendocs
+      - name: Fail if README changed
+        run: |
+          if [[ -n $(git status --porcelain README.md) ]]; then
+            echo "README.md is out of date. Run 'redactyl gendocs' and commit the changes." >&2
+            git --no-pager diff -- README.md | cat
+            exit 1
+          fi
+
