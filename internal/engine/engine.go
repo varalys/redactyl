@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	doublestar "github.com/bmatcuk/doublestar/v4"
 	xxhash "github.com/cespare/xxhash/v2"
 	"github.com/franzer/redactyl/internal/cache"
 	"github.com/franzer/redactyl/internal/detectors"
@@ -139,6 +140,9 @@ func ScanWithStats(cfg Config) (Result, error) {
 			for i, p := range files {
 				i, p := i, p
 				g.Go(func() error {
+					if !allowedByGlobs(p, cfg) {
+						return nil
+					}
 					if cfg.MaxBytes > 0 && int64(len(data[i])) > cfg.MaxBytes {
 						return nil
 					}
@@ -183,6 +187,9 @@ func ScanWithStats(cfg Config) (Result, error) {
 			var items []pair
 			for _, e := range entries {
 				for path, blob := range e.Files {
+					if !allowedByGlobs(path, cfg) {
+						continue
+					}
 					if ign.Match(path) {
 						continue
 					}
@@ -256,6 +263,9 @@ func ScanWithStats(cfg Config) (Result, error) {
 			for i, p := range files {
 				i, p := i, p
 				g.Go(func() error {
+					if !allowedByGlobs(p, cfg) {
+						return nil
+					}
 					if ign.Match(p) {
 						return nil
 					}
@@ -363,4 +373,62 @@ func filterByIDs(fs []types.Finding, enable, disable string) []types.Finding {
 		out = append(out, f)
 	}
 	return out
+}
+
+// allowedByGlobs returns true if the given path is allowed by the include/exclude
+// glob configuration. Include globs are comma-separated and, if provided, act as
+// a positive filter. Exclude globs are subtracted last. Matching uses forward-slash
+// semantics via path.Match.
+func allowedByGlobs(relPath string, cfg Config) bool {
+	rp := strings.ReplaceAll(relPath, "\\", "/")
+	includes := parseGlobsList(cfg.IncludeGlobs)
+	excludes := parseGlobsList(cfg.ExcludeGlobs)
+	if len(includes) > 0 {
+		matched := matchAnyGlob(rp, includes)
+		if !matched {
+			return false
+		}
+	}
+	if len(excludes) > 0 && matchAnyGlob(rp, excludes) {
+		return false
+	}
+	return true
+}
+
+func parseGlobsList(s string) []string {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	var out []string
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+			// add variant without leading "./" and "**/" so patterns like "**/*.go" also match top-level files
+			out = append(out, trimGlobPrefix(p))
+		}
+	}
+	return out
+}
+
+func matchAnyGlob(pathToMatch string, globs []string) bool {
+	for _, g := range globs {
+		if ok, _ := doublestar.Match(g, pathToMatch); ok {
+			return true
+		}
+		// Also try against basename for simple patterns like "*.go"
+		if ok, _ := doublestar.Match(g, filepath.Base(pathToMatch)); ok {
+			return true
+		}
+	}
+	return false
+}
+
+func trimGlobPrefix(g string) string {
+	s := strings.TrimPrefix(g, "./")
+	for strings.HasPrefix(s, "**/") {
+		s = strings.TrimPrefix(s, "**/")
+	}
+	return s
 }

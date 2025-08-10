@@ -1,0 +1,57 @@
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: vendor
+  skip-dirs:
+    - vendor
+  allow-parallel-runners: true
+
+linters:
+  enable:
+    - govet
+    - staticcheck
+    - gosimple
+    - ineffassign
+    - errcheck
+    - gocritic
+    - gofmt
+    - goimports
+    - misspell
+    - revive
+  disable:
+    - godot
+    - wsl
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+  gocritic:
+    enable-all: false
+    disabled-checks:
+      - hugeParam
+  revive:
+    severity: warning
+    rules:
+      - name: exported
+        disabled: true
+      - name: if-return
+      - name: indent-error-flow
+      - name: superfluous-else
+      - name: unexported-return
+  misspell:
+    locale: US
+
+issues:
+  exclude-use-default: false
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck
+        - revive
+    - path: internal/engine/filters\.go
+      text: "DefaultGeneratedIgnores|defaultExclude"
+      linters:
+        - revive
+
+

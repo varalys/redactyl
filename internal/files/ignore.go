@@ -36,3 +36,11 @@ func AppendIgnore(repoRoot, pattern string) error {
 	}
 	return nil
 }
+
+// DefaultGeneratedIgnores returns common generated patterns that are safe to ignore.
+func DefaultGeneratedIgnores() []string {
+	return []string{
+		"*.pb.go",
+		"*.gen.*",
+	}
+}

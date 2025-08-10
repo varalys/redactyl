@@ -16,18 +16,19 @@ import (
 )
 
 var (
-	flagPath        string
-	flagStaged      bool
-	flagHistory     int
-	flagBase        string
-	flagInclude     string
-	flagExclude     string
-	flagMaxBytes    int64
-	flagEnable      string
-	flagDisable     string
-	flagGuide       bool
-	flagUploadURL   string
-	flagUploadToken string
+	flagPath         string
+	flagStaged       bool
+	flagHistory      int
+	flagBase         string
+	flagInclude      string
+	flagExclude      string
+	flagMaxBytes     int64
+	flagEnable       string
+	flagDisable      string
+	flagGuide        bool
+	flagUploadURL    string
+	flagUploadToken  string
+	flagNoUploadMeta bool
 )
 
 func init() {
@@ -50,6 +51,7 @@ func init() {
 	cmd.Flags().BoolVar(&flagGuide, "guide", false, "print suggested remediation commands for findings")
 	cmd.Flags().StringVar(&flagUploadURL, "upload", "", "POST findings (JSON) to this URL after scan")
 	cmd.Flags().StringVar(&flagUploadToken, "upload-token", "", "Bearer token for upload auth")
+	cmd.Flags().BoolVar(&flagNoUploadMeta, "no-upload-metadata", false, "do not include repo/commit/branch in upload envelope")
 }
 
 func runScan(cmd *cobra.Command, _ []string) error {
@@ -152,7 +154,7 @@ func runScan(cmd *cobra.Command, _ []string) error {
 
 	// Optional upload step: do not fail the scan on upload errors
 	if flagUploadURL != "" {
-		if err := uploadFindings(flagUploadURL, flagUploadToken, convertFindings(newFindings)); err != nil {
+		if err := uploadFindings(abs, flagUploadURL, flagUploadToken, flagNoUploadMeta, convertFindings(newFindings)); err != nil {
 			fmt.Fprintln(os.Stderr, "upload warning:", err)
 		}
 	}

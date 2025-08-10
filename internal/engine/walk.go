@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"io/fs"
+	"mime"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,14 +21,15 @@ func Walk(ctx context.Context, cfg Config, ign ignore.Matcher, handle func(path 
 		if d.IsDir() {
 			name := d.Name()
 			// Default exclude directories
-			if cfg.DefaultExcludes && (strings.HasPrefix(name, ".git") || name == "node_modules" || name == "target" || name == "vendor" ||
-				name == "dist" || name == "build" || name == "out" || name == ".venv" || name == "venv" ||
-				name == "__pycache__" || name == "coverage" || name == "bin" || name == "obj") {
+			if cfg.DefaultExcludes && isDefaultDirExcluded(name) {
 				return filepath.SkipDir
 			}
 			return nil
 		}
 		rel, _ := filepath.Rel(cfg.Root, p)
+		if !allowedByGlobs(rel, cfg) {
+			return nil
+		}
 		if ign.Match(rel) {
 			return nil
 		}
@@ -37,16 +39,12 @@ func Walk(ctx context.Context, cfg Config, ign ignore.Matcher, handle func(path 
 		}
 		// Cheap extension-based skips
 		lower := strings.ToLower(rel)
-		switch {
-		case strings.HasSuffix(lower, ".min.js"), strings.HasSuffix(lower, ".map"),
-			strings.HasSuffix(lower, ".png"), strings.HasSuffix(lower, ".jpg"), strings.HasSuffix(lower, ".jpeg"), strings.HasSuffix(lower, ".gif"), strings.HasSuffix(lower, ".webp"), strings.HasSuffix(lower, ".svg"),
-			strings.HasSuffix(lower, ".pdf"), strings.HasSuffix(lower, ".zip"), strings.HasSuffix(lower, ".gz"), strings.HasSuffix(lower, ".tar"), strings.HasSuffix(lower, ".tgz"), strings.HasSuffix(lower, ".7z"),
-			strings.HasSuffix(lower, ".jar"), strings.HasSuffix(lower, ".class"), strings.HasSuffix(lower, ".exe"), strings.HasSuffix(lower, ".dll"), strings.HasSuffix(lower, ".so"):
-			if cfg.DefaultExcludes {
-				return nil
-			}
+		if cfg.DefaultExcludes && isDefaultFileExcluded(lower) {
+			return nil
 		}
-		// crude binary skip
+		// read small prefix for binary/MIME sniff (then pass full content to detectors)
+		// optimize by reading file once; if too large, os.ReadFile will still return full content but
+		// MaxBytes gate above prevents oversized files anyway.
 		b, err := os.ReadFile(p)
 		if err != nil {
 			return nil
@@ -55,7 +53,7 @@ func Walk(ctx context.Context, cfg Config, ign ignore.Matcher, handle func(path 
 		if strings.Contains(string(b), "redactyl:ignore-file") {
 			return nil
 		}
-		if looksBinary(b) {
+		if looksBinary(b) || looksNonTextMIME(rel, b) {
 			return nil
 		}
 		handle(rel, b)
@@ -77,6 +75,32 @@ func looksBinary(b []byte) bool {
 	return false
 }
 
+// looksNonTextMIME uses the file extension and a tiny content sniff to skip
+// clearly non-text content (e.g., images) in addition to NUL-byte detection.
+func looksNonTextMIME(path string, b []byte) bool {
+	// fast-path by extension
+	if ct := mime.TypeByExtension(filepath.Ext(path)); ct != "" {
+		if strings.HasPrefix(ct, "image/") || strings.HasPrefix(ct, "video/") || strings.HasPrefix(ct, "audio/") {
+			return true
+		}
+		if strings.Contains(ct, "zip") || strings.Contains(ct, "tar") || strings.Contains(ct, "gzip") {
+			return true
+		}
+	}
+	// basic header sniff for common binaries
+	if len(b) >= 4 {
+		// PNG signature
+		if len(b) >= 8 && string(b[:8]) == "\x89PNG\r\n\x1a\n" {
+			return true
+		}
+		// ZIP (PK) header
+		if b[0] == 'P' && b[1] == 'K' {
+			return true
+		}
+	}
+	return false
+}
+
 // CountTargets estimates the number of files to process based on cfg.
 // It mirrors selection logic used by Scan paths but avoids heavy reads.
 func CountTargets(cfg Config) (int, error) {
@@ -90,6 +114,9 @@ func CountTargets(cfg Config) (int, error) {
 		n := 0
 		for _, e := range entries {
 			for path, blob := range e.Files {
+				if !allowedByGlobs(path, cfg) {
+					continue
+				}
 				if ign.Match(path) {
 					continue
 				}
@@ -109,6 +136,12 @@ func CountTargets(cfg Config) (int, error) {
 		}
 		n := 0
 		for i, p := range files {
+			if len(data[i]) == 0 { // skip pure deletions/renames with no added lines
+				continue
+			}
+			if !allowedByGlobs(p, cfg) {
+				continue
+			}
 			if ign.Match(p) {
 				continue
 			}
@@ -127,6 +160,9 @@ func CountTargets(cfg Config) (int, error) {
 		}
 		n := 0
 		for i, p := range files {
+			if !allowedByGlobs(p, cfg) {
+				continue
+			}
 			if ign.Match(p) {
 				continue
 			}
@@ -145,14 +181,15 @@ func CountTargets(cfg Config) (int, error) {
 		}
 		if d.IsDir() {
 			name := d.Name()
-			if strings.HasPrefix(name, ".git") || name == "node_modules" || name == "target" || name == "vendor" ||
-				name == "dist" || name == "build" || name == "out" || name == ".venv" || name == "venv" ||
-				name == "__pycache__" || name == "coverage" || name == "bin" || name == "obj" {
+			if isDefaultDirExcluded(name) {
 				return filepath.SkipDir
 			}
 			return nil
 		}
 		rel, _ := filepath.Rel(cfg.Root, p)
+		if !allowedByGlobs(rel, cfg) {
+			return nil
+		}
 		if ign.Match(rel) {
 			return nil
 		}
@@ -161,11 +198,7 @@ func CountTargets(cfg Config) (int, error) {
 			return nil
 		}
 		lower := strings.ToLower(rel)
-		switch {
-		case strings.HasSuffix(lower, ".min.js"), strings.HasSuffix(lower, ".map"),
-			strings.HasSuffix(lower, ".png"), strings.HasSuffix(lower, ".jpg"), strings.HasSuffix(lower, ".jpeg"), strings.HasSuffix(lower, ".gif"), strings.HasSuffix(lower, ".webp"), strings.HasSuffix(lower, ".svg"),
-			strings.HasSuffix(lower, ".pdf"), strings.HasSuffix(lower, ".zip"), strings.HasSuffix(lower, ".gz"), strings.HasSuffix(lower, ".tar"), strings.HasSuffix(lower, ".tgz"), strings.HasSuffix(lower, ".7z"),
-			strings.HasSuffix(lower, ".jar"), strings.HasSuffix(lower, ".class"), strings.HasSuffix(lower, ".exe"), strings.HasSuffix(lower, ".dll"), strings.HasSuffix(lower, ".so"):
+		if isDefaultFileExcluded(lower) {
 			return nil
 		}
 		count++

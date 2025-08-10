@@ -3,8 +3,8 @@
 Thank you for your interest in contributing!
 
 - Use Go 1.23+.
-- Run tests locally: `go test ./...`.
-- Lint: `golangci-lint run` (CI will run it too).
+- Run tests locally: `go test ./... -race`.
+- Lint: `golangci-lint run` (CI will run it too; see `.golangci.yml`).
 - Add tests for new detectors and features.
 - Keep PRs focused and small; include a brief description.
 
@@ -13,6 +13,7 @@ Thank you for your interest in contributing!
 - Build: `make build` (outputs `bin/redactyl`).
 - Run: `./bin/redactyl --help`.
 - Generate config: `./bin/redactyl config init`.
+ - E2E CLI tests: see `cmd/redactyl/e2e_cli_test.go` for examples of validating JSON/SARIF shapes.
 
 ## Code of Conduct
 

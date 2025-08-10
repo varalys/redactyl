@@ -11,9 +11,7 @@ builds:
       - CGO_ENABLED=0
     ldflags:
       - -s -w
-      - -X main.version={{.Version}}
-      - -X main.commit={{.FullCommit}}
-      - -X main.date={{.Date}}
+      - -X github.com/franzer/redactyl/cmd/redactyl.version={{.Version}}
     goos:
       - linux
       - darwin

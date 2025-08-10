@@ -24,8 +24,9 @@ type sarifTool struct {
 }
 
 type sarifDriver struct {
-	Name    string `json:"name"`
-	Version string `json:"version"`
+	Name    string      `json:"name"`
+	Version string      `json:"version"`
+	Rules   []sarifRule `json:"rules,omitempty"`
 }
 
 type sarifResult struct {
@@ -33,6 +34,7 @@ type sarifResult struct {
 	Level     string       `json:"level"`
 	Message   sarifMessage `json:"message"`
 	Locations []sarifLoc   `json:"locations"`
+	RuleIndex int          `json:"ruleIndex,omitempty"`
 }
 
 type sarifMessage struct {
@@ -53,7 +55,19 @@ type sarifArt struct {
 }
 
 type sarifRegion struct {
-	StartLine int `json:"startLine"`
+	StartLine int           `json:"startLine"`
+	Snippet   *sarifSnippet `json:"snippet,omitempty"`
+}
+
+type sarifSnippet struct {
+	Text string `json:"text"`
+}
+
+type sarifRule struct {
+	ID           string        `json:"id"`
+	ShortDesc    *sarifMessage `json:"shortDescription,omitempty"`
+	Help         *sarifMessage `json:"help,omitempty"`
+	DefaultLevel string        `json:"defaultConfiguration,omitempty"`
 }
 
 func sevToLevel(s types.Severity) string {
@@ -69,18 +83,30 @@ func sevToLevel(s types.Severity) string {
 
 // WriteSARIF writes findings as SARIF 2.1.0 to the provided writer.
 func WriteSARIF(w io.Writer, findings []types.Finding) error {
-	run := sarifRun{
-		Tool: sarifTool{Driver: sarifDriver{Name: "redactyl", Version: time.Now().Format("2006.01.02")}},
+	run := sarifRun{Tool: sarifTool{Driver: sarifDriver{Name: "redactyl", Version: time.Now().Format("2006.01.02")}}}
+	// Build a stable set of rules under tool.driver.rules to reference by index
+	ruleIndex := map[string]int{}
+	for _, f := range findings {
+		if _, ok := ruleIndex[f.Detector]; !ok {
+			ruleIndex[f.Detector] = len(run.Tool.Driver.Rules)
+			run.Tool.Driver.Rules = append(run.Tool.Driver.Rules, sarifRule{
+				ID:        f.Detector,
+				ShortDesc: &sarifMessage{Text: f.Detector + " detection"},
+				Help:      &sarifMessage{Text: "Secret-like token detected. Review and rotate if valid."},
+			})
+		}
 	}
 	for _, f := range findings {
+		idx := ruleIndex[f.Detector]
 		run.Results = append(run.Results, sarifResult{
-			RuleID:  f.Detector,
-			Level:   sevToLevel(f.Severity),
-			Message: sarifMessage{Text: f.Detector + " detected"},
+			RuleID:    f.Detector,
+			RuleIndex: idx,
+			Level:     sevToLevel(f.Severity),
+			Message:   sarifMessage{Text: f.Detector + " detected"},
 			Locations: []sarifLoc{{
 				PhysicalLocation: sarifPhys{
 					ArtifactLocation: sarifArt{URI: f.Path},
-					Region:           sarifRegion{StartLine: f.Line},
+					Region:           sarifRegion{StartLine: f.Line, Snippet: &sarifSnippet{Text: f.Match}},
 				},
 			}},
 		})

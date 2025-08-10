@@ -1,6 +1,8 @@
 package git
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -9,6 +11,38 @@ import (
 type Entry struct {
 	Hash  string
 	Files map[string][]byte
+}
+
+// RepoMetadata returns (repo, commit, branch) best-effort for the given root.
+// Empty strings are returned on failure. It avoids heavy git calls and uses
+// simple plumbing to remain fast in CI.
+func RepoMetadata(root string) (string, string, string) {
+	// repo (remote origin URL short)
+	repo := ""
+	if out, err := exec.Command("git", "-C", root, "config", "--get", "remote.origin.url").Output(); err == nil {
+		s := strings.TrimSpace(string(out))
+		// trim common suffix
+		s = strings.TrimSuffix(s, ".git")
+		// keep owner/name when possible
+		if i := strings.LastIndex(s, ":"); i >= 0 {
+			s = s[i+1:]
+		}
+		if i := strings.Index(s, "github.com/"); i >= 0 {
+			s = s[i+len("github.com/"):]
+		}
+		repo = s
+	}
+	// commit
+	commit := ""
+	if out, err := exec.Command("git", "-C", root, "rev-parse", "HEAD").Output(); err == nil {
+		commit = strings.TrimSpace(string(out))
+	}
+	// branch (try symbolic-ref, fallback to show-branch)
+	branch := ""
+	if out, err := exec.Command("git", "-C", root, "rev-parse", "--abbrev-ref", "HEAD").Output(); err == nil {
+		branch = strings.TrimSpace(string(out))
+	}
+	return repo, commit, branch
 }
 
 func LastNCommits(root string, n int) ([]Entry, error) {
@@ -54,13 +88,25 @@ func DiffAgainst(root, base string) ([]string, [][]byte, error) {
 	paths := strings.Fields(string(out))
 	var data [][]byte
 	for _, p := range paths {
-		show := exec.Command("git", "-C", root, "diff", base, "--", p)
+		show := exec.Command("git", "-C", root, "diff", "--unified=0", base, "--", p)
 		b, err := show.Output()
 		if err != nil {
 			b = []byte{}
 		}
-		// crude: take added lines only could be a later enhancement
-		data = append(data, b)
+		// Extract only added lines from unified diff ('+' lines, excluding headers like '+++' and '@@')
+		buf := bytes.NewBuffer(nil)
+		sc := bufio.NewScanner(bytes.NewReader(b))
+		for sc.Scan() {
+			line := sc.Text()
+			if strings.HasPrefix(line, "+++") || strings.HasPrefix(line, "---") || strings.HasPrefix(line, "@@") {
+				continue
+			}
+			if strings.HasPrefix(line, "+") {
+				buf.WriteString(strings.TrimPrefix(line, "+"))
+				buf.WriteByte('\n')
+			}
+		}
+		data = append(data, buf.Bytes())
 	}
 	return paths, data, nil
 }

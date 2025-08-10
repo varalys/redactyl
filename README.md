@@ -153,6 +153,7 @@ no_color: false
   testdata/**
   ```
 - Paths matching this file are skipped.
+  - By default, Redactyl excludes common noisy artifacts and generated files (configurable): lockfiles (e.g., `yarn.lock`), binaries (`*.wasm`, `*.pyc`), large archives, and generated code (`*.pb.go`, `*.gen.*`). Use `--include/--exclude` and `.redactylignore` to override.
 
 ### Remediation
 - Forward-only fixes (safe defaults):
@@ -160,18 +161,18 @@ no_color: false
     ```sh
     ./bin/redactyl fix path .env --add-ignore
     ```
-  - Redact secrets in-place using regex and commit:
+  - Redact secrets in-place using regex and commit (optionally record a summary file):
     ```sh
-    ./bin/redactyl fix redact --file app.yaml --pattern 'password:\s*\S+' --replace 'password: <redacted>'
+    ./bin/redactyl fix redact --file app.yaml --pattern 'password:\s*\S+' --replace 'password: <redacted>' --summary remediation.json
     ```
   - Generate/update `.env.example` from `.env` and ensure `.env` is ignored:
     ```sh
     ./bin/redactyl fix dotenv --from .env --to .env.example --add-ignore
     ```
 - History rewrite (dangerous; creates a backup branch; you likely must force-push):
-  - Remove a single path from all history:
+  - Remove a single path from all history (with a summary file to audit in CI):
     ```sh
-    ./bin/redactyl purge path secrets.json --yes --backup-branch my-backup
+    ./bin/redactyl purge path secrets.json --yes --backup-branch my-backup --summary remediation.json
     ```
   - Remove by glob pattern(s):
     ```sh
@@ -181,7 +182,7 @@ no_color: false
     ```sh
     ./bin/redactyl purge replace --replacements replacements.txt --yes
     ```
-  - Add `--dry-run` to print the exact commands without executing, and `--summary purge.json` to write a remediation summary.
+  - Add `--dry-run` to print the exact commands without executing, and `--summary purge.json` to write a small remediation summary JSON you can parse in CI.
 
 ### Detectors
 - List available IDs:
@@ -266,12 +267,14 @@ See also: `docs/enterprise.md` for integration options.
 - **--history N**: scan last N commits
 - **--base BRANCH**: scan diff vs base branch
 - **--include / --exclude**: comma-separated globs
+  - Globs use doublestar-style matching with forward slashes, e.g., `**/*.go`, `src/**/test_*.ts`. On Windows, use `/` in patterns.
 - **--max-bytes**: skip files larger than this (default: 1 MiB)
 - **--threads**: worker count (default: GOMAXPROCS)
 - **--enable / --disable**: comma-separated detector IDs
 - **--json / --sarif**: select output format
 - **--fail-on**: low | medium | high (default: medium)
 - **--guide**: print suggested remediation commands after a scan
+ - **--no-upload-metadata**: when used with `--upload`, omit repo/commit/branch from the envelope (privacy-sensitive CI)
 
 ### Exit codes
 - 0: no findings or below threshold

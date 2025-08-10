@@ -7,6 +7,7 @@ toolchain go1.24.5
 require (
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/blang/semver/v4 v4.0.0
+	github.com/bmatcuk/doublestar/v4 v4.9.1
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/go-git/go-git/v5 v5.16.2
 	github.com/rhysd/go-github-selfupdate v1.2.3

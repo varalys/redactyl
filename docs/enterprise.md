@@ -9,6 +9,11 @@ This document outlines two integration options for organizations.
   redactyl scan --json --upload https://your.example/api/v1/findings \
     --upload-token $REDACTYL_TOKEN
   ```
+  - For privacy-sensitive environments, you can omit git metadata from the envelope:
+    ```sh
+    redactyl scan --json --upload https://your.example/api/v1/findings \
+      --upload-token $REDACTYL_TOKEN --no-upload-metadata
+    ```
 - Envelope fields: `tool`, `version`, `schema_version`, optional `repo|commit|branch`, and `findings`.
 - Schemas:
   - Findings: `docs/schemas/findings.schema.json`

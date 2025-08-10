@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/franzer/redactyl/internal/git"
 	"github.com/franzer/redactyl/internal/types"
 	"github.com/franzer/redactyl/pkg/core"
 )
@@ -23,11 +24,17 @@ type uploadEnvelope struct {
 	Findings []core.Finding `json:"findings"`
 }
 
-func uploadFindings(url, token string, findings []core.Finding) error {
+func uploadFindings(rootPath, url, token string, noMeta bool, findings []core.Finding) error {
 	if len(findings) == 0 {
 		return nil
 	}
-	body, _ := json.Marshal(uploadEnvelope{Tool: "redactyl", Version: version, Schema: uploadSchemaVersion, Findings: findings})
+	env := uploadEnvelope{Tool: "redactyl", Version: version, Schema: uploadSchemaVersion, Findings: findings}
+	if !noMeta {
+		// Best-effort git metadata
+		repo, commit, branch := git.RepoMetadata(rootPath)
+		env.Repo, env.Commit, env.Branch = repo, commit, branch
+	}
+	body, _ := json.Marshal(env)
 	req, _ := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	if token != "" {
