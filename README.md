@@ -26,6 +26,25 @@ Find secrets in your repo with low noise. Redactyl scans your working tree, stag
 - SARIF viewer and detector test mode
 - CI-friendly exit codes
 
+### AI-assisted development
+- Modern AI coding assistants (Copilot, ChatGPT, etc.) frequently suggest realistic placeholder credentials that can accidentally get committed
+- Redactyl's context-aware detection catches both human mistakes and AI-generated secrets that traditional pattern-only scanners miss
+- Protects against AI-suggested keys that match real service formats but appear harmless in isolation
+
+Common AI-generated risks:
+```python
+# AI assistants often suggest code like this:
+openai_client = OpenAI(
+    api_key="sk-1234567890abcdef..."  # Looks fake but matches real format
+)
+stripe.api_key = "sk_test_abc123..."   # Valid test key structure
+aws_session = boto3.Session(
+    aws_access_key_id="AKIA1234567890123456"  # Proper AWS key format
+)
+```
+- Traditional regex-only scanners may miss these because they lack context
+- Redactyl combines pattern detection with contextual analysis to catch AI-suggested credentials before they reach production
+
 ### Install
 - Build locally (repo root):
   ```sh
@@ -84,6 +103,14 @@ Find secrets in your repo with low noise. Redactyl scans your working tree, stag
   If installed globally:
   ```sh
   redactyl scan --sarif > redactyl.sarif.json
+  ```
+- Text format:
+  ```sh
+  ./bin/redactyl scan --text
+  ```
+  If installed globally:
+  ```sh
+  redactyl scan --text
   ```
 - Staged changes only:
   ```sh
@@ -220,7 +247,8 @@ Categories and example IDs (run `redactyl detectors` for the full, up-to-date li
 <!-- END:DETECTORS_CATEGORIES -->
 
 ### Output formats
-- Table (default): human-friendly summary
+- Table (default): formatted table with borders and alignment for easy reading
+- Text: plain columnar output with severity, detector, location, and redacted match (use `--text`)
 - JSON: machine-readable; never returns null array
 - SARIF 2.1.0: for code scanning dashboards
 
@@ -267,7 +295,7 @@ See also: `docs/enterprise.md` for integration options.
 - **--max-bytes**: skip files larger than this (default: 1 MiB)
 - **--threads**: worker count (default: GOMAXPROCS)
 - **--enable / --disable**: comma-separated detector IDs
-- **--json / --sarif**: select output format
+- **--json / --sarif / --text**: select output format (table is default)
 - **--fail-on**: low | medium | high (default: medium)
 - **--guide**: print suggested remediation commands after a scan
  - **--no-upload-metadata**: when used with `--upload`, omit repo/commit/branch from the envelope (privacy-sensitive CI)

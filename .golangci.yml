@@ -66,6 +66,10 @@ issues:
       linters: [errcheck]
     - text: "Error return value of `cache\\.Save`"
       linters: [errcheck]
+    - text: "Error return value of `table\\.Append`"
+      linters: [errcheck]
+    - text: "Error return value of `table\\.Render`"
+      linters: [errcheck]
     - text: "Error return value of `ignore\\.Load`"
       linters: [errcheck]
     - text: "Error return value of `g\\.Wait`"

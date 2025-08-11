@@ -29,6 +29,8 @@ var (
 	flagUploadURL    string
 	flagUploadToken  string
 	flagNoUploadMeta bool
+	flagTable        bool
+	flagText         bool
 )
 
 func init() {
@@ -52,6 +54,8 @@ func init() {
 	cmd.Flags().StringVar(&flagUploadURL, "upload", "", "POST findings (JSON) to this URL after scan")
 	cmd.Flags().StringVar(&flagUploadToken, "upload-token", "", "Bearer token for upload auth")
 	cmd.Flags().BoolVar(&flagNoUploadMeta, "no-upload-metadata", false, "do not include repo/commit/branch in upload envelope")
+	cmd.Flags().BoolVar(&flagTable, "table", false, "output in table format with borders (now default)")
+	cmd.Flags().BoolVar(&flagText, "text", false, "output in plain text columnar format")
 }
 
 func runScan(cmd *cobra.Command, _ []string) error {
@@ -137,8 +141,39 @@ func runScan(cmd *cobra.Command, _ []string) error {
 		if err := enc.Encode(newFindings); err != nil {
 			return err
 		}
+	case flagText:
+		report.PrintText(os.Stdout, newFindings, report.PrintOptions{NoColor: flagNoColor, Duration: res.Duration, FilesScanned: res.FilesScanned, TotalFiles: total, TotalFindings: len(res.Findings)})
+		if flagGuide && len(newFindings) > 0 {
+			_, _ = fmt.Fprintln(os.Stderr, "\nSuggested remediation commands:")
+			for _, f := range newFindings {
+				// conservative guidance: if file looks like dotenv, suggest fix dotenv
+				lower := strings.ToLower(f.Path)
+				if strings.HasSuffix(lower, ".env") || strings.Contains(lower, ".env") {
+					_, _ = fmt.Fprintln(os.Stderr, "  redactyl fix dotenv --from", f.Path, "--add-ignore --summary remediation.json")
+					continue
+				}
+				// otherwise suggest redact for the match span and path-based removal if binary/secret files
+				_, _ = fmt.Fprintln(os.Stderr, "  redactyl fix redact --file", f.Path, "--pattern", "'"+regexpQuote(f.Match)+"'", "--replace '<redacted>' --summary remediation.json")
+			}
+		}
+	case flagTable:
+		report.PrintTable(os.Stdout, newFindings, report.PrintOptions{NoColor: flagNoColor, Duration: res.Duration, FilesScanned: res.FilesScanned, TotalFiles: total, TotalFindings: len(res.Findings)})
+		if flagGuide && len(newFindings) > 0 {
+			_, _ = fmt.Fprintln(os.Stderr, "\nSuggested remediation commands:")
+			for _, f := range newFindings {
+				// conservative guidance: if file looks like dotenv, suggest fix dotenv
+				lower := strings.ToLower(f.Path)
+				if strings.HasSuffix(lower, ".env") || strings.Contains(lower, ".env") {
+					_, _ = fmt.Fprintln(os.Stderr, "  redactyl fix dotenv --from", f.Path, "--add-ignore --summary remediation.json")
+					continue
+				}
+				// otherwise suggest redact for the match span and path-based removal if binary/secret files
+				_, _ = fmt.Fprintln(os.Stderr, "  redactyl fix redact --file", f.Path, "--pattern", "'"+regexpQuote(f.Match)+"'", "--replace '<redacted>' --summary remediation.json")
+			}
+		}
 	default:
-		report.PrintTable(os.Stdout, newFindings, report.PrintOptions{NoColor: flagNoColor, Duration: res.Duration, FilesScanned: res.FilesScanned})
+		// Default to table format now
+		report.PrintTable(os.Stdout, newFindings, report.PrintOptions{NoColor: flagNoColor, Duration: res.Duration, FilesScanned: res.FilesScanned, TotalFiles: total, TotalFindings: len(res.Findings)})
 		if flagGuide && len(newFindings) > 0 {
 			_, _ = fmt.Fprintln(os.Stderr, "\nSuggested remediation commands:")
 			for _, f := range newFindings {
