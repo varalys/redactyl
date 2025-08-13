@@ -6,6 +6,8 @@
 [![Lint](https://github.com/redactyl/redactyl/actions/workflows/lint.yml/badge.svg)](https://github.com/redactyl/redactyl/actions/workflows/lint.yml)
 [![Vuln](https://github.com/redactyl/redactyl/actions/workflows/vuln.yml/badge.svg)](https://github.com/redactyl/redactyl/actions/workflows/vuln.yml)
 
+[![Release](https://github.com/redactyl/redactyl/actions/workflows/release.yml/badge.svg)](https://github.com/redactyl/redactyl/actions/workflows/release.yml)
+
 Find secrets in your repo with low noise. Redactyl scans your working tree, staged changes, diffs, or history and reports likely credentials and tokens.
 
 ### Features
@@ -362,10 +364,3 @@ jobs:
   - Upload from OSS CLI to your server: `--json --upload` (see schemas in `docs/schemas/`).
   - Or run scans in Enterprise workers via `github.com/redactyl/redactyl/pkg/core`.
 - Inquiries: open a GitHub Discussion (Q&A) titled "Enterprise inquiry".
-
----
-
-Badges
-
-![Tests](https://github.com/redactyl/redactyl/actions/workflows/test.yml/badge.svg)
-![Release](https://github.com/redactyl/redactyl/actions/workflows/release.yml/badge.svg)
