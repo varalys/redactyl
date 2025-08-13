@@ -1,8 +1,6 @@
 module github.com/redactyl/redactyl
 
-go 1.23.0
-
-toolchain go1.24.5
+go 1.25.0
 
 require (
 	github.com/blang/semver v3.5.1+incompatible
