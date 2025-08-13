@@ -42,7 +42,7 @@ func init() {
 					dburi = append(dburi, id)
 				case strings.Contains(id, "github_") || strings.Contains(id, "gitlab_") || strings.Contains(id, "npm_") || strings.Contains(id, "terraform_cloud") || strings.Contains(id, "heroku_") || strings.Contains(id, "sentry_") || strings.Contains(id, "docker_config") || strings.Contains(id, "rubygems_") || strings.Contains(id, "npmrc_") || strings.Contains(id, "git_credentials_"):
 					cicd = append(cicd, id)
-				case strings.Contains(id, "slack_") || strings.Contains(id, "discord_") || strings.Contains(id, "telegram_"):
+				case strings.Contains(id, "slack_") || strings.Contains(id, "discord_") || strings.Contains(id, "telegram_") || strings.Contains(id, "zapier_") || strings.Contains(id, "ifttt_"):
 					msg = append(msg, id)
 				case strings.Contains(id, "stripe_") || strings.Contains(id, "sendgrid_") || strings.Contains(id, "mailgun_"):
 					pay = append(pay, id)

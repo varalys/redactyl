@@ -18,6 +18,8 @@ var all = []Detector{
 	DiscordBotToken,
 	// File-format leaks
 	NPMRCAuthToken, RubyGemsCredentials, DockerConfigAuth, GitCredentialsURLSecret,
+	// New general services
+	LinearAPIKey, PostHogProjectKey, PostHogPersonalKey, DigitalOceanPAT, DockerHubPAT, VercelToken, NetlifyToken, RenderAPIKey, FlyIOAccessToken, NewRelicAPIKey, OktaAPIToken, PrismaDataProxyURL, ZapierWebhookURL, IFTTTWebhookURL, HasuraAdminSecret, SupabaseServiceRoleKey, AirtablePAT, SentryAuthToken, NetlifyBuildHookURL,
 }
 
 func RunAll(path string, data []byte) []types.Finding {
@@ -97,6 +99,26 @@ func IDs() []string {
 		"rubygems_credentials",
 		"docker_config_auth",
 		"git_credentials_url_secret",
+		// Additional IDs
+		"linear_api_key",
+		"posthog_project_key",
+		"posthog_personal_key",
+		"digitalocean_pat",
+		"dockerhub_pat",
+		"vercel_token",
+		"netlify_token",
+		"render_api_key",
+		"flyio_access_token",
+		"newrelic_api_key",
+		"okta_api_token",
+		"prisma_data_proxy_url",
+		"zapier_webhook_url",
+		"ifttt_webhook_url",
+		"hasura_admin_secret",
+		"supabase_service_role_key",
+		"airtable_pat",
+		"sentry_auth_token",
+		"netlify_build_hook",
 	}
 }
 
@@ -161,10 +183,30 @@ var funcByID = map[string]Detector{
 	"rubygems":   RubyGemsCredentials,
 	"docker":     DockerConfigAuth,
 	"gitcreds":   GitCredentialsURLSecret,
+	// Additional simple IDs
+	"linear":       LinearAPIKey,
+	"posthog_proj": PostHogProjectKey,
+	"posthog_pers": PostHogPersonalKey,
+	"do":           DigitalOceanPAT,
+	"dockerhub":    DockerHubPAT,
+	"vercel":       VercelToken,
+	"netlify":      NetlifyToken,
+	"render":       RenderAPIKey,
+	"flyio":        FlyIOAccessToken,
+	"newrelic":     NewRelicAPIKey,
+	"okta":         OktaAPIToken,
+	"prisma":       PrismaDataProxyURL,
+	"zapier":       ZapierWebhookURL,
+	"ifttt":        IFTTTWebhookURL,
+	"hasura":       HasuraAdminSecret,
+	"supabase":     SupabaseServiceRoleKey,
+	"airtable":     AirtablePAT,
+	"sentryauth":   SentryAuthToken,
+	"netlifyhook":  NetlifyBuildHookURL,
 }
 
 func FunctionIDs() []string {
-	return []string{"aws", "github", "slack", "jwt", "privatekey", "entropy", "stripe", "twilio", "google", "gitlab", "sendgrid", "slackweb", "discord", "openai", "npm", "gcp", "mailgun", "dburi", "azure", "tfc", "heroku", "sentry", "firebase", "anthropic", "groq", "pplx", "replicate", "openrouter", "cohere", "mistral", "stability", "ai21", "azopenai", "hf", "wandb", "kaggle", "pinecone", "weaviate", "qdrant", "cloudflare", "datadog", "mapbox", "telegram", "snyk", "databricks", "shopify", "notion", "pypi", "azsas", "cloudinary", "redis", "amqp", "mssql", "discbot", "npmrc", "rubygems", "docker", "gitcreds"}
+	return []string{"aws", "github", "slack", "jwt", "privatekey", "entropy", "stripe", "twilio", "google", "gitlab", "sendgrid", "slackweb", "discord", "openai", "npm", "gcp", "mailgun", "dburi", "azure", "tfc", "heroku", "sentry", "firebase", "anthropic", "groq", "pplx", "replicate", "openrouter", "cohere", "mistral", "stability", "ai21", "azopenai", "hf", "wandb", "kaggle", "pinecone", "weaviate", "qdrant", "cloudflare", "datadog", "mapbox", "telegram", "snyk", "databricks", "shopify", "notion", "pypi", "azsas", "cloudinary", "redis", "amqp", "mssql", "discbot", "npmrc", "rubygems", "docker", "gitcreds", "linear", "posthog_proj", "posthog_pers", "do", "dockerhub", "vercel", "netlify", "render", "flyio", "newrelic", "okta", "prisma", "zapier", "ifttt", "hasura", "supabase", "airtable", "sentryauth", "netlifyhook"}
 }
 
 func RunFunction(id, path string, data []byte) []types.Finding {
