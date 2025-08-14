@@ -1,0 +1,15 @@
+pipelines:
+  default:
+    - step:
+        name: Redactyl Scan
+        image: golang:1.22
+        caches:
+          - go
+        script:
+          - go version
+          - go build -o bin/redactyl .
+          - ./bin/redactyl scan --json --fail-on medium | tee redactyl-findings.json
+        artifacts:
+          - redactyl-findings.json
+
+

@@ -371,6 +371,18 @@ Or add via the pre-commit framework:
 ./bin/redactyl action init
 ```
 
+### Other CI templates
+- GitLab CI: see `docs/ci/gitlab-ci.yml`
+- Bitbucket Pipelines: see `docs/ci/bitbucket-pipelines.yml`
+- Azure DevOps: see `docs/ci/azure-pipelines.yml`
+
+Or generate to your repo with:
+```sh
+./bin/redactyl ci init --provider gitlab
+./bin/redactyl ci init --provider bitbucket
+./bin/redactyl ci init --provider azure
+```
+
 ### Notes
 - Redactyl respects `.redactylignore` for path filtering.
 - Findings are deduplicated by `(path|detector|match)`.

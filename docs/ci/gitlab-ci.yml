@@ -1,0 +1,14 @@
+stages: [scan]
+scan:
+  stage: scan
+  image: golang:1.22
+  script:
+    - go version
+    - go build -o bin/redactyl .
+    - ./bin/redactyl scan --json --fail-on medium | tee redactyl-findings.json
+  artifacts:
+    when: always
+    paths:
+      - redactyl-findings.json
+
+

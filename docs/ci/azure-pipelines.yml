@@ -1,0 +1,20 @@
+trigger:
+- main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+steps:
+- task: GoTool@0
+  inputs:
+    version: '1.22.x'
+- script: |
+    go version
+    go build -o bin/redactyl .
+    ./bin/redactyl scan --json --fail-on medium | tee redactyl-findings.json
+  displayName: 'Redactyl Scan'
+- publish: redactyl-findings.json
+  artifact: redactyl-findings
+  condition: succeededOrFailed()
+
+

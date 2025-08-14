@@ -40,3 +40,9 @@ redactyl.baseline.json
 
 
 .redactylcache.json
+
+# scan outputs and reports
+redactyl-findings.json
+*.sarif.json
+remediation.json
+purge.json

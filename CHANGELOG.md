@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+- Add `redactyl ci init --provider {gitlab|bitbucket|azure}` to generate CI templates for GitLab, Bitbucket Pipelines, and Azure DevOps.
+- README: document new CI usage commands.
+
 All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project adheres to Semantic Versioning.
