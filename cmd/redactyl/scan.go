@@ -34,6 +34,7 @@ var (
 	flagText         bool
 	flagNoValidators bool
 	flagNoStructured bool
+	flagVerify       string
 )
 
 func init() {
@@ -61,6 +62,7 @@ func init() {
 	cmd.Flags().BoolVar(&flagText, "text", false, "output in plain text columnar format")
 	cmd.Flags().BoolVar(&flagNoValidators, "no-validators", false, "disable post-detection validator heuristics")
 	cmd.Flags().BoolVar(&flagNoStructured, "no-structured", false, "disable structured JSON/YAML key scanning")
+	cmd.Flags().StringVar(&flagVerify, "verify", "off", "soft verify mode: off|safe|custom")
 }
 
 func runScan(cmd *cobra.Command, _ []string) error {
@@ -96,6 +98,8 @@ func runScan(cmd *cobra.Command, _ []string) error {
 	detectors.EnableValidators = !flagNoValidators
 	// toggle structured scanning
 	detectors.EnableStructured = !flagNoStructured
+	// soft verify mode
+	detectors.VerifyMode = flagVerify
 
 	// Friendly banner before scanning
 	if !flagJSON && !flagSARIF {

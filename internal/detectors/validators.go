@@ -10,6 +10,12 @@ import (
 // EnableValidators controls whether detector-specific validators run post-detection.
 var EnableValidators = true
 
+// VerifyMode controls optional soft verification behavior (off|safe|custom).
+// off: no additional checks beyond validators
+// safe: apply local-only structural checks (length/charset/decoding) already covered by validators
+// custom: reserved placeholder for user-provided local checks (future)
+var VerifyMode = "off"
+
 type findingValidator func(f types.Finding) (types.Finding, bool)
 
 var ruleValidators = map[string]findingValidator{

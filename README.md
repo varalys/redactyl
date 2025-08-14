@@ -336,6 +336,7 @@ See also: `docs/enterprise.md` for integration options.
 - **--guide**: print suggested remediation commands after a scan
  - **--no-validators**: disable post-detection validator heuristics (prefix/length/structure checks)
  - **--no-structured**: disable structured JSON/YAML key scanning
+ - **--verify**: off | safe | custom (soft verification mode; local-checks only)
  - **--no-upload-metadata**: when used with `--upload`, omit repo/commit/branch from the envelope (privacy-sensitive CI)
 
 ### Exit codes
