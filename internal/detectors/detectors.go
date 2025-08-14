@@ -27,6 +27,11 @@ func RunAll(path string, data []byte) []types.Finding {
 	for _, d := range all {
 		out = append(out, d(path, data)...)
 	}
+	// Add structured JSON/YAML field scanning
+	if EnableStructured {
+		out = append(out, StructuredFields(path, data)...)
+	}
+	out = applyValidators(out)
 	return dedupe(out)
 }
 

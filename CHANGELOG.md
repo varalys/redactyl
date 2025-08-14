@@ -3,6 +3,10 @@
 ## Unreleased
 - Add `redactyl ci init --provider {gitlab|bitbucket|azure}` to generate CI templates for GitLab, Bitbucket Pipelines, and Azure DevOps.
 - README: document new CI usage commands.
+- Detection: add validator heuristics and structured context foundation
+  - New `internal/validate` and `internal/ctxparse`
+  - Validators wired across major detectors; `--no-validators` flag to disable
+  - Expanded tests for validators and coverage check
 
 All notable changes to this project will be documented in this file.
 

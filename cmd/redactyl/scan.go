@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/redactyl/redactyl/internal/config"
+	"github.com/redactyl/redactyl/internal/detectors"
 	"github.com/redactyl/redactyl/internal/engine"
 	"github.com/redactyl/redactyl/internal/report"
 	"github.com/redactyl/redactyl/internal/types"
@@ -31,6 +32,8 @@ var (
 	flagNoUploadMeta bool
 	flagTable        bool
 	flagText         bool
+	flagNoValidators bool
+	flagNoStructured bool
 )
 
 func init() {
@@ -56,6 +59,8 @@ func init() {
 	cmd.Flags().BoolVar(&flagNoUploadMeta, "no-upload-metadata", false, "do not include repo/commit/branch in upload envelope")
 	cmd.Flags().BoolVar(&flagTable, "table", false, "output in table format with borders (now default)")
 	cmd.Flags().BoolVar(&flagText, "text", false, "output in plain text columnar format")
+	cmd.Flags().BoolVar(&flagNoValidators, "no-validators", false, "disable post-detection validator heuristics")
+	cmd.Flags().BoolVar(&flagNoStructured, "no-structured", false, "disable structured JSON/YAML key scanning")
 }
 
 func runScan(cmd *cobra.Command, _ []string) error {
@@ -86,6 +91,11 @@ func runScan(cmd *cobra.Command, _ []string) error {
 		NoCache:          pickBool(flagNoCache, nil, nil),
 		DefaultExcludes:  flagDefaultExcludes,
 	}
+
+	// toggle validators
+	detectors.EnableValidators = !flagNoValidators
+	// toggle structured scanning
+	detectors.EnableStructured = !flagNoStructured
 
 	// Friendly banner before scanning
 	if !flagJSON && !flagSARIF {

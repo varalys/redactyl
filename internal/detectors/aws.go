@@ -6,6 +6,7 @@ import (
 	"regexp"
 
 	"github.com/redactyl/redactyl/internal/types"
+	"github.com/redactyl/redactyl/internal/validate"
 )
 
 var (
@@ -22,16 +23,16 @@ func AWSKeys(path string, data []byte) []types.Finding {
 		line++
 		txt := sc.Text()
 		if reAWSAccess.FindStringIndex(txt) != nil {
-			out = append(out, types.Finding{
-				Path: path, Line: line, Match: reAWSAccess.FindString(txt),
-				Detector: "aws_access_key", Severity: types.SevHigh, Confidence: 0.9,
-			})
+			m := reAWSAccess.FindString(txt)
+			if validate.LooksLikeAWSAccessKey(m) {
+				out = append(out, types.Finding{Path: path, Line: line, Match: m, Detector: "aws_access_key", Severity: types.SevHigh, Confidence: 0.95})
+			}
 		}
 		if m := reAWSSecret.FindStringSubmatch(txt); len(m) == 3 {
-			out = append(out, types.Finding{
-				Path: path, Line: line, Match: m[2],
-				Detector: "aws_secret_key", Severity: types.SevHigh, Confidence: 0.95,
-			})
+			candidate := m[2]
+			if validate.LooksLikeAWSSecretKey(candidate) {
+				out = append(out, types.Finding{Path: path, Line: line, Match: candidate, Detector: "aws_secret_key", Severity: types.SevHigh, Confidence: 0.97})
+			}
 		}
 	}
 	return out

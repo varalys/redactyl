@@ -272,6 +272,13 @@ Categories and example IDs (run `redactyl detectors` for the full, up-to-date li
   - airtable_pat, azure_sas_token, cloudflare_token, cloudinary_url_creds, databricks_pat, datadog_api_key, datadog_app_key, digitalocean_pat, dockerhub_pat, entropy_context, flyio_access_token, hasura_admin_secret, jwt, linear_api_key, mapbox_token, netlify_build_hook, netlify_token, newrelic_api_key, notion_api_key, okta_api_token, posthog_personal_key, posthog_project_key, prisma_data_proxy_url, private_key_block, pypi_token, render_api_key, shopify_token, snyk_token, supabase_service_role_key, twilio_account_sid, twilio_api_key_secret_like, twilio_api_key_sid, twilio_auth_token, vercel_token
 <!-- END:DETECTORS_CATEGORIES -->
 
+### How detection works
+- Redactyl combines pattern matching with contextual signals, structured parsing, and lightweight validators to reduce noise:
+  - Context: nearby keywords (e.g., token, secret, api_key) and filetype hints
+  - Structured JSON/YAML: best-effort key/value extraction with line mapping for `.json`, `.yml`, `.yaml` (catches values even when split across lines or nested). Common keys: `openai_api_key`, `github_token`, `aws_access_key_id`, `aws_secret_access_key`, `slack_webhook`, `discord_webhook`, `stripe_secret`, `google_api_key`, `netlify_token`, `render_api_key`, `jwt`, `firebase apiKey`, `terraform token`
+  - Validators: provider-specific prefix/length/alphabet checks and structural decoding (e.g., JWT base64url segments)
+- You can tune minimum confidence via `--min-confidence`. Strongly validated matches tend to score higher.
+
 ### Output formats
 - Table (default): formatted table with borders and alignment for easy reading
 - Text: plain columnar output with severity, detector, location, and redacted match (use `--text`)
@@ -327,6 +334,8 @@ See also: `docs/enterprise.md` for integration options.
 - **--json / --sarif / --text**: select output format (table is default)
 - **--fail-on**: low | medium | high (default: medium)
 - **--guide**: print suggested remediation commands after a scan
+ - **--no-validators**: disable post-detection validator heuristics (prefix/length/structure checks)
+ - **--no-structured**: disable structured JSON/YAML key scanning
  - **--no-upload-metadata**: when used with `--upload`, omit repo/commit/branch from the envelope (privacy-sensitive CI)
 
 ### Exit codes

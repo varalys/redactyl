@@ -6,6 +6,7 @@ import (
 	"regexp"
 
 	"github.com/redactyl/redactyl/internal/types"
+	"github.com/redactyl/redactyl/internal/validate"
 )
 
 // PAT formats evolve; cover ghp_, gho_, ghu_, ghs_, ghr_
@@ -18,10 +19,10 @@ func GitHubToken(path string, data []byte) []types.Finding {
 	for sc.Scan() {
 		line++
 		if reGHP.FindStringIndex(sc.Text()) != nil {
-			out = append(out, types.Finding{
-				Path: path, Line: line, Match: reGHP.FindString(sc.Text()),
-				Detector: "github_token", Severity: types.SevHigh, Confidence: 0.9,
-			})
+			m := reGHP.FindString(sc.Text())
+			if validate.LooksLikeGitHubToken(m) {
+				out = append(out, types.Finding{Path: path, Line: line, Match: m, Detector: "github_token", Severity: types.SevHigh, Confidence: 0.95})
+			}
 		}
 	}
 	return out

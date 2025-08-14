@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/redactyl/redactyl/internal/types"
+	"github.com/redactyl/redactyl/internal/validate"
 )
 
 var (
@@ -26,7 +27,9 @@ func OpenAIAPIKey(path string, data []byte) []types.Finding {
 		}
 		if reOpenAIContext.MatchString(t) {
 			if m := reOpenAIKey.FindString(t); m != "" {
-				out = append(out, types.Finding{Path: path, Line: line, Match: m, Detector: "openai_api_key", Severity: types.SevHigh, Confidence: 0.9})
+				if validate.LooksLikeOpenAIKey(m) {
+					out = append(out, types.Finding{Path: path, Line: line, Match: m, Detector: "openai_api_key", Severity: types.SevHigh, Confidence: 0.95})
+				}
 			}
 		}
 	}
