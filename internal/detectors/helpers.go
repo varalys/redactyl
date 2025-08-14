@@ -22,9 +22,33 @@ func findSimple(path string, data []byte, re *regexp.Regexp, id string, sev type
 	var out []types.Finding
 	sc := bufio.NewScanner(bytes.NewReader(data))
 	line := 0
+	ignoreRegion := false
+	skipNext := false
 	for sc.Scan() {
 		line++
 		t := sc.Text()
+		// Region markers
+		if strings.Contains(t, "redactyl:ignore-start") || strings.Contains(t, "redactyl: ignore-start") {
+			ignoreRegion = true
+			continue
+		}
+		if strings.Contains(t, "redactyl:ignore-end") || strings.Contains(t, "redactyl: ignore-end") {
+			ignoreRegion = false
+			continue
+		}
+		if ignoreRegion {
+			continue
+		}
+		// Next-line marker
+		if strings.Contains(t, "redactyl:ignore-next-line") || strings.Contains(t, "redactyl: ignore-next-line") {
+			skipNext = true
+			continue
+		}
+		if skipNext {
+			skipNext = false
+			continue
+		}
+		// Legacy single-line ignore with provider substring heuristic
 		if strings.Contains(t, "redactyl:ignore") && strings.Contains(strings.ToLower(t), strings.Split(id, "_")[0]) {
 			continue
 		}
@@ -42,9 +66,34 @@ func findWithContext(path string, data []byte, ctxRe, valueRe *regexp.Regexp, id
 	var out []types.Finding
 	sc := bufio.NewScanner(bytes.NewReader(data))
 	line := 0
+	// Region/next-line state for inline suppressions
+	ignoreRegion := false
+	skipNext := false
 	for sc.Scan() {
 		line++
 		t := sc.Text()
+		// Handle region markers first
+		if strings.Contains(t, "redactyl:ignore-start") || strings.Contains(t, "redactyl: ignore-start") {
+			ignoreRegion = true
+			continue
+		}
+		if strings.Contains(t, "redactyl:ignore-end") || strings.Contains(t, "redactyl: ignore-end") {
+			ignoreRegion = false
+			continue
+		}
+		if ignoreRegion {
+			continue
+		}
+		// Handle next-line marker
+		if strings.Contains(t, "redactyl:ignore-next-line") || strings.Contains(t, "redactyl: ignore-next-line") {
+			skipNext = true
+			continue
+		}
+		if skipNext {
+			skipNext = false
+			continue
+		}
+		// Legacy single-line ignore retains provider substring heuristic
 		if strings.Contains(t, "redactyl:ignore") && strings.Contains(strings.ToLower(t), strings.Split(id, "_")[0]) {
 			continue
 		}

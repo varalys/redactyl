@@ -1,0 +1,7 @@
+# CODEOWNERS
+# See GitHub docs: manage repository settings about code owners
+
+* @franzer
+/docs/** @franzer
+/internal/** @franzer
+/cmd/** @franzer

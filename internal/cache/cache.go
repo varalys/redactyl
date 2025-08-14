@@ -13,6 +13,12 @@ type DB struct {
 }
 
 func defaultPath(root string) string {
+	// Prefer storing cache under .git to avoid accidental commits
+	// Fall back to repo root if .git does not exist
+	gitDir := filepath.Join(root, ".git")
+	if st, err := os.Stat(gitDir); err == nil && st.IsDir() {
+		return filepath.Join(gitDir, "redactylcache.json")
+	}
 	return filepath.Join(root, ".redactylcache.json")
 }
 

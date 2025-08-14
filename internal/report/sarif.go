@@ -67,6 +67,7 @@ type sarifRule struct {
 	ID           string        `json:"id"`
 	ShortDesc    *sarifMessage `json:"shortDescription,omitempty"`
 	Help         *sarifMessage `json:"help,omitempty"`
+	HelpURI      string        `json:"helpUri,omitempty"`
 	DefaultLevel string        `json:"defaultConfiguration,omitempty"`
 }
 
@@ -93,6 +94,7 @@ func WriteSARIF(w io.Writer, findings []types.Finding) error {
 				ID:        f.Detector,
 				ShortDesc: &sarifMessage{Text: f.Detector + " detection"},
 				Help:      &sarifMessage{Text: "Secret-like token detected. Review and rotate if valid."},
+				HelpURI:   "https://github.com/redactyl/redactyl/blob/main/docs/rules/README.md#" + f.Detector,
 			})
 		}
 	}

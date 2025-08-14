@@ -28,6 +28,10 @@ Find secrets in your repo with low noise. Redactyl scans your working tree, stag
 - SARIF viewer and detector test mode
 - CI-friendly exit codes
 
+### Privacy & Telemetry
+- No code or findings are sent anywhere by default. There is no telemetry.
+- Optional upload is explicit via `--upload` and can omit repo metadata with `--no-upload-metadata`.
+
 ### AI-assisted development
 - Modern AI coding assistants (Copilot, ChatGPT, etc.) frequently suggest realistic placeholder credentials that can accidentally get committed
 - Redactyl's context-aware detection catches both human mistakes and AI-generated secrets that traditional pattern-only scanners miss
@@ -184,6 +188,26 @@ no_color: false
 - Paths matching this file are skipped.
   - By default, Redactyl excludes common noisy artifacts and generated files (configurable): lockfiles (e.g., `yarn.lock`), binaries (`*.wasm`, `*.pyc`), large archives, and generated code (`*.pb.go`, `*.gen.*`). Use `--include/--exclude` and `.redactylignore` to override.
 
+### Inline suppressions
+- Suppress a single line for any detector:
+  ```
+  password = "not_a_real_secret"  # redactyl:ignore
+  ```
+- Suppress only the next line:
+  ```
+  # redactyl:ignore-next-line
+  api_key = "sk_test_not_real"
+  ```
+- Suppress a region:
+  ```
+  # redactyl:ignore-start
+  ... lines ...
+  # redactyl:ignore-end
+  ```
+Notes:
+- Region and next-line ignores apply regardless of detector ID.
+- The legacy `redactyl:ignore` continues to work and can be paired with a provider substring on the same line.
+
 ### Remediation
 - Forward-only fixes (safe defaults):
   - Remove a tracked file and ignore it:
@@ -277,6 +301,9 @@ See also: `docs/enterprise.md` for integration options.
 ./bin/redactyl sarif view redactyl.sarif.json
 ```
 
+### Rule reference
+- See `docs/rules/README.md` for short descriptions and examples for each detector.
+
 ### CLI reference
 - `./bin/redactyl --help`
 - `./bin/redactyl scan --help`
@@ -321,11 +348,22 @@ jobs:
           go-version: 'stable'
       - run: go build -o bin/redactyl .
       - run: ./bin/redactyl scan --sarif > redactyl.sarif.json
+       - uses: github/codeql-action/upload-sarif@v3
+         with:
+           sarif_file: redactyl.sarif.json
 ```
 
 ### Pre-commit hook
 ```sh
 ./bin/redactyl hook install --pre-commit
+```
+Or add via the pre-commit framework:
+
+```yaml
+- repo: https://github.com/redactyl/redactyl
+  rev: v0.1.0
+  hooks:
+    - id: redactyl-scan
 ```
 
 ### GitHub Action template
@@ -350,6 +388,14 @@ jobs:
   ./bin/redactyl update
   ```
  - See `CHANGELOG.md` for notable changes.
+
+### Compatibility
+- Versioning policy (SemVer):
+  - CLI: additive flags and outputs are minor; breaking changes bump major.
+  - JSON output: backwards-compatible field additions are minor; removing/renaming fields is major.
+  - SARIF: remains compliant with v2.1.0; we only add optional fields (e.g., helpUri) without breaking consumers.
+  - Rule IDs: stable; renames or removals are major. New rule IDs may be added in any minor.
+  - Public Go API (`pkg/core`): follows SemVer; breaking changes require a major version.
 
 ### License
 - Apache-2.0. See [`LICENSE`](LICENSE).

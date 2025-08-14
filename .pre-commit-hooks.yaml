@@ -1,0 +1,9 @@
+- id: redactyl-scan
+  name: redactyl scan (staged)
+  description: Run Redactyl on staged files to detect secrets
+  entry: redactyl
+  args: ["scan", "--staged", "--text"]
+  language: system
+  types: [text]
+
+
