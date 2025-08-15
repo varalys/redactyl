@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/redactyl/redactyl/internal/config"
 	"github.com/redactyl/redactyl/internal/detectors"
@@ -35,6 +36,14 @@ var (
 	flagNoValidators bool
 	flagNoStructured bool
 	flagVerify       string
+	// deep scanning toggles and limits
+	flagArchives        bool
+	flagContainers      bool
+	flagIaC             bool
+	flagMaxArchiveBytes int64
+	flagMaxEntries      int
+	flagMaxDepth        int
+	flagScanTimeBudget  time.Duration
 )
 
 func init() {
@@ -63,6 +72,14 @@ func init() {
 	cmd.Flags().BoolVar(&flagNoValidators, "no-validators", false, "disable post-detection validator heuristics")
 	cmd.Flags().BoolVar(&flagNoStructured, "no-structured", false, "disable structured JSON/YAML key scanning")
 	cmd.Flags().StringVar(&flagVerify, "verify", "off", "soft verify mode: off|safe|custom")
+	// deep scanning flags
+	cmd.Flags().BoolVar(&flagArchives, "archives", false, "enable deep scanning of archives (zip/tar/gz)")
+	cmd.Flags().BoolVar(&flagContainers, "containers", false, "enable deep scanning of container tarballs (Docker save)")
+	cmd.Flags().BoolVar(&flagIaC, "iac", false, "enable scanning IaC hotspots (tfstate, kubeconfigs)")
+	cmd.Flags().Int64Var(&flagMaxArchiveBytes, "max-archive-bytes", 32<<20, "max decompressed bytes per artifact before aborting")
+	cmd.Flags().IntVar(&flagMaxEntries, "max-entries", 1000, "max entries per archive/container before aborting")
+	cmd.Flags().IntVar(&flagMaxDepth, "max-depth", 2, "max recursion depth for nested archives")
+	cmd.Flags().DurationVar(&flagScanTimeBudget, "scan-time-budget", 10*time.Second, "time budget per artifact (e.g., 10s)")
 }
 
 func runScan(cmd *cobra.Command, _ []string) error {
@@ -74,6 +91,18 @@ func runScan(cmd *cobra.Command, _ []string) error {
 	}
 	if c, err := config.LoadLocal(abs); err == nil {
 		lcfg = c
+	}
+
+	// Resolve time budget precedence: CLI > local > global
+	budget := flagScanTimeBudget
+	if lcfg.ScanTimeBudget != nil {
+		if d, err := time.ParseDuration(*lcfg.ScanTimeBudget); err == nil {
+			budget = d
+		}
+	} else if gcfg.ScanTimeBudget != nil {
+		if d, err := time.ParseDuration(*gcfg.ScanTimeBudget); err == nil {
+			budget = d
+		}
 	}
 
 	cfg := engine.Config{
@@ -92,6 +121,13 @@ func runScan(cmd *cobra.Command, _ []string) error {
 		NoColor:          pickBool(flagNoColor, lcfg.NoColor, gcfg.NoColor),
 		NoCache:          pickBool(flagNoCache, nil, nil),
 		DefaultExcludes:  flagDefaultExcludes,
+		ScanArchives:     pickBool(flagArchives, lcfg.Archives, gcfg.Archives),
+		ScanContainers:   pickBool(flagContainers, lcfg.Containers, gcfg.Containers),
+		ScanIaC:          pickBool(flagIaC, lcfg.IaC, gcfg.IaC),
+		MaxArchiveBytes:  pickInt64(flagMaxArchiveBytes, lcfg.MaxArchiveBytes, gcfg.MaxArchiveBytes),
+		MaxEntries:       pickInt(flagMaxEntries, lcfg.MaxEntries, gcfg.MaxEntries),
+		MaxDepth:         pickInt(flagMaxDepth, lcfg.MaxDepth, gcfg.MaxDepth),
+		ScanTimeBudget:   budget,
 	}
 
 	// toggles: CLI overrides config when present

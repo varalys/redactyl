@@ -8,6 +8,13 @@
   - Validators wired across major detectors; `--no-validators` flag to disable
   - Expanded tests for validators and coverage check
 
+### Added
+- Optional deep scanning for archives and container tarballs
+  - Flags: `--archives`, `--containers`, `--iac` (WIP)
+  - Guardrails: `--max-archive-bytes`, `--max-entries`, `--max-depth`, `--scan-time-budget`
+  - Virtual path origins for entries inside artifacts (e.g., `archive.zip::path/file.txt`, `image.tar::<layerID>/path`)
+  - Streaming readers; no extraction to disk; binary/MIME skips
+
 All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project adheres to Semantic Versioning.

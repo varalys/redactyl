@@ -3,6 +3,7 @@ package engine
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 	doublestar "github.com/bmatcuk/doublestar/v4"
 	xxhash "github.com/cespare/xxhash/v2"
+	"github.com/redactyl/redactyl/internal/artifacts"
 	"github.com/redactyl/redactyl/internal/cache"
 	"github.com/redactyl/redactyl/internal/detectors"
 	"github.com/redactyl/redactyl/internal/git"
@@ -38,6 +40,15 @@ type Config struct {
 	DefaultExcludes  bool
 	NoCache          bool
 	Progress         func()
+
+	// Deep artifact scanning (optional)
+	ScanArchives    bool
+	ScanContainers  bool
+	ScanIaC         bool
+	MaxArchiveBytes int64
+	MaxEntries      int
+	MaxDepth        int
+	ScanTimeBudget  time.Duration
 }
 
 var (
@@ -299,6 +310,49 @@ func ScanWithStats(cfg Config) (Result, error) {
 			close(findingsCh)
 			<-done
 			result.FilesScanned += int(scanned)
+		}
+	}
+
+	// Optional deep artifact scanning (sequential orchestration, internal parallelism TBD)
+	if cfg.ScanArchives || cfg.ScanContainers || cfg.ScanIaC {
+		lim := artifacts.Limits{
+			MaxArchiveBytes: cfg.MaxArchiveBytes,
+			MaxEntries:      cfg.MaxEntries,
+			MaxDepth:        cfg.MaxDepth,
+			TimeBudget:      cfg.ScanTimeBudget,
+		}
+		emitArtifact := func(p string, b []byte) {
+			if cfg.DryRun {
+				return
+			}
+			fs := detectors.RunAll(p, b)
+			fs = filterByConfidence(fs, cfg.MinConfidence)
+			fs = filterByIDs(fs, cfg.EnableDetectors, cfg.DisableDetectors)
+			emit(fs)
+			if !cfg.NoCache {
+				updated[p] = fastHash(b)
+			}
+			result.FilesScanned++
+			if cfg.Progress != nil {
+				cfg.Progress()
+			}
+		}
+		// Reuse include/exclude globs to filter which artifact filenames are processed
+		allowArtifact := func(rel string) bool { return allowedByGlobs(rel, cfg) }
+		if cfg.ScanArchives {
+			if err := artifacts.ScanArchivesWithFilter(cfg.Root, lim, allowArtifact, emitArtifact); err != nil {
+				_ = fmt.Errorf("archives scan: %w", err)
+			}
+		}
+		if cfg.ScanContainers {
+			if err := artifacts.ScanContainersWithFilter(cfg.Root, lim, allowArtifact, emitArtifact); err != nil {
+				_ = fmt.Errorf("containers scan: %w", err)
+			}
+		}
+		if cfg.ScanIaC {
+			if err := artifacts.ScanIaC(cfg.Root, lim, emitArtifact); err != nil {
+				_ = fmt.Errorf("iac scan: %w", err)
+			}
 		}
 	}
 

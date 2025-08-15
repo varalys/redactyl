@@ -24,6 +24,15 @@ type FileConfig struct {
 	VerifyMode        *string  `yaml:"verify"`
 	DisableValidators *string  `yaml:"disable_validators"`
 	DisableStructured *string  `yaml:"disable_structured"`
+
+	// Deep scanning config mirrors CLI flags
+	Archives        *bool   `yaml:"archives"`
+	Containers      *bool   `yaml:"containers"`
+	IaC             *bool   `yaml:"iac"`
+	MaxArchiveBytes *int64  `yaml:"max_archive_bytes"`
+	MaxEntries      *int    `yaml:"max_entries"`
+	MaxDepth        *int    `yaml:"max_depth"`
+	ScanTimeBudget  *string `yaml:"scan_time_budget"`
 }
 
 // LoadFile reads a YAML config file from the provided path.
