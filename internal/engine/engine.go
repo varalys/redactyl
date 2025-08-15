@@ -3,7 +3,6 @@ package engine
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -351,19 +350,13 @@ func ScanWithStats(cfg Config) (Result, error) {
 		allowArtifact := func(rel string) bool { return allowedByGlobs(rel, cfg) }
 		var artStats artifacts.Stats
 		if cfg.ScanArchives {
-			if err := artifacts.ScanArchivesWithStats(cfg.Root, lim, allowArtifact, emitArtifact, &artStats); err != nil {
-				_ = fmt.Errorf("archives scan: %w", err)
-			}
+			_ = artifacts.ScanArchivesWithStats(cfg.Root, lim, allowArtifact, emitArtifact, &artStats)
 		}
 		if cfg.ScanContainers {
-			if err := artifacts.ScanContainersWithStats(cfg.Root, lim, allowArtifact, emitArtifact, &artStats); err != nil {
-				_ = fmt.Errorf("containers scan: %w", err)
-			}
+			_ = artifacts.ScanContainersWithStats(cfg.Root, lim, allowArtifact, emitArtifact, &artStats)
 		}
 		if cfg.ScanIaC {
-			if err := artifacts.ScanIaCWithFilter(cfg.Root, lim, allowArtifact, emitArtifact); err != nil {
-				_ = fmt.Errorf("iac scan: %w", err)
-			}
+			_ = artifacts.ScanIaCWithFilter(cfg.Root, lim, allowArtifact, emitArtifact)
 		}
 		result.ArtifactStats = DeepStats{
 			AbortedByBytes:   artStats.AbortedByBytes,

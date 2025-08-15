@@ -87,6 +87,9 @@ steps:
 		},
 	}
 	initCmd.Flags().StringVar(&provider, "provider", "", "CI provider: gitlab | bitbucket | azure")
-	_ = initCmd.MarkFlagRequired("provider")
+	if err := initCmd.MarkFlagRequired("provider"); err != nil {
+		// fallback: print a hint if cobra API changes
+		fmt.Fprintln(os.Stderr, "warning: could not mark --provider as required:", err)
+	}
 	ci.AddCommand(initCmd)
 }

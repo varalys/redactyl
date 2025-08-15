@@ -90,7 +90,10 @@ func ScanArchivesWithFilter(root string, limits Limits, allow PathAllowFunc, emi
 		}
 		// Avoid double-processing container images: skip .tar that looks like a Docker save
 		if strings.HasSuffix(strings.ToLower(rel), ".tar") {
-			ok, _ := isContainerTar(p)
+			ok, ierr := isContainerTar(p)
+			if ierr != nil {
+				return nil
+			}
 			if ok {
 				return nil
 			}
@@ -103,7 +106,9 @@ func ScanArchivesWithFilter(root string, limits Limits, allow PathAllowFunc, emi
 		}
 		var decompressed int64
 		var entries int
-		_ = scanArchiveFile(p, rel, limits, &decompressed, &entries, 0, deadline, emit)
+		if ferr := scanArchiveFile(p, rel, limits, &decompressed, &entries, 0, deadline, emit); ferr != nil {
+			// ignore per-entry errors
+		}
 		return nil
 	})
 	return nil
@@ -133,8 +138,8 @@ func ScanContainersWithFilter(root string, limits Limits, allow PathAllowFunc, e
 		if !strings.HasSuffix(strings.ToLower(rel), ".tar") {
 			return nil
 		}
-		isContainer, err := isContainerTar(p)
-		if err != nil || !isContainer {
+		isContainer, ierr := isContainerTar(p)
+		if ierr != nil || !isContainer {
 			return nil
 		}
 		if allow != nil && !allow(rel) {
@@ -149,23 +154,21 @@ func ScanContainersWithFilter(root string, limits Limits, allow PathAllowFunc, e
 		var decompressed int64
 		var entries int
 		// stream through outer tar and process each layer tar entry
-		f, err := os.Open(p)
-		if err != nil {
+		f, oerr := os.Open(p)
+		if oerr != nil {
 			return nil
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		tr := tar.NewReader(f)
 		for {
 			if r := limitsExceededReason(limits, decompressed, entries, 0, deadline); r != "" {
-				// reserved for future stats usage
-				_ = r
 				return nil
 			}
-			hdr, err := tr.Next()
-			if errors.Is(err, io.EOF) || hdr == nil {
+			hdr, nerr := tr.Next()
+			if errors.Is(nerr, io.EOF) || hdr == nil {
 				return nil
 			}
-			if err != nil {
+			if nerr != nil {
 				return nil
 			}
 			name := hdr.Name
@@ -184,7 +187,9 @@ func ScanContainersWithFilter(root string, limits Limits, allow PathAllowFunc, e
 				// Limit reader to this entry size and hand off to tar reader using '/' join for layer path
 				lr := &io.LimitedReader{R: tr, N: hdr.Size}
 				vp := rel + "::" + layerID
-				_ = scanTarReaderJoin(vp, "/", limits, &decompressed, &entries, 1, deadline, emit, lr)
+				if terr := scanTarReaderJoin(vp, "/", limits, &decompressed, &entries, 1, deadline, emit, lr); terr != nil {
+					// ignore per-entry errors
+				}
 			}
 		}
 	})
@@ -488,7 +493,7 @@ func scanArchiveFile(fullPath string, rel string, limits Limits, decompressed *i
 		}
 		vp := rel + "::" + name
 		emit(vp, b)
-		*entries = *entries + 1
+		*entries++
 		return nil
 	default:
 		return nil
@@ -535,7 +540,7 @@ func scanZipReader(archivePath string, limits Limits, decompressed *int64, entri
 			}
 			vp := archivePath + "::" + name
 			emit(vp, b)
-			*entries = *entries + 1
+			*entries++
 		}
 	default:
 		// Cannot determine size; skip
@@ -577,7 +582,7 @@ func scanTarReaderJoin(archivePath string, sep string, limits Limits, decompress
 		}
 		vp := archivePath + sep + name
 		emit(vp, b)
-		*entries = *entries + 1
+		*entries++
 	}
 }
 
@@ -613,7 +618,7 @@ func scanNestedArchive(pathChain string, name string, blob []byte, limits Limits
 				continue
 			}
 			emit(pathChain+"::"+fname, b)
-			*entries = *entries + 1
+			*entries++
 		}
 	case strings.HasSuffix(lower, ".tar.gz") || strings.HasSuffix(lower, ".tgz"):
 		gz, err := gzip.NewReader(bytes.NewReader(blob))
@@ -642,7 +647,7 @@ func scanNestedArchive(pathChain string, name string, blob []byte, limits Limits
 			return nil
 		}
 		emit(pathChain+"::"+name, b)
-		*entries = *entries + 1
+		*entries++
 	}
 	return nil
 }
@@ -938,7 +943,7 @@ func scanArchiveFileWithStats(fullPath string, rel string, limits Limits, decomp
 			return nil
 		}
 		emit(rel+"::"+name, b)
-		*entries = *entries + 1
+		*entries++
 		return nil
 	default:
 		return nil
@@ -990,7 +995,7 @@ func scanZipReaderWithStats(archivePath string, limits Limits, decompressed *int
 				continue
 			}
 			emit(archivePath+"::"+name, b)
-			*entries = *entries + 1
+			*entries++
 		}
 	default:
 		return nil
@@ -1036,7 +1041,7 @@ func scanTarReaderWithStats(archivePath string, limits Limits, decompressed *int
 			continue
 		}
 		emit(archivePath+"::"+name, b)
-		*entries = *entries + 1
+		*entries++
 	}
 }
 
@@ -1082,7 +1087,7 @@ func scanNestedArchiveWithStats(pathChain string, name string, blob []byte, limi
 				continue
 			}
 			emit(pathChain+"::"+fname, b)
-			*entries = *entries + 1
+			*entries++
 		}
 	case strings.HasSuffix(lower, ".tar.gz") || strings.HasSuffix(lower, ".tgz"):
 		gz, err := gzip.NewReader(bytes.NewReader(blob))
@@ -1116,7 +1121,7 @@ func scanNestedArchiveWithStats(pathChain string, name string, blob []byte, limi
 			return nil
 		}
 		emit(pathChain+"::"+n, b)
-		*entries = *entries + 1
+		*entries++
 	}
 	return nil
 }
