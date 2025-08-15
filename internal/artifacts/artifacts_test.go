@@ -273,6 +273,99 @@ func TestScanContainersWithFilter_IncludeExclude(t *testing.T) {
 	}
 }
 
+func TestScanArchivesWithStats_Counters(t *testing.T) {
+	dir := t.TempDir()
+	zipPath := filepath.Join(dir, "many.zip")
+	files := map[string]string{}
+	for i := 0; i < 50; i++ {
+		files[filepath.Join("d", "f", "file_"+itoa(i)+".txt")] = "x"
+	}
+	big := make([]byte, 64*1024)
+	files["big.txt"] = string(big)
+	makeZip(t, zipPath, files)
+
+	stats := &Stats{}
+	lim := Limits{MaxArchiveBytes: 32 * 1024, MaxEntries: 10, MaxDepth: 1, TimeBudget: 50 * time.Millisecond}
+	_ = ScanArchivesWithStats(dir, lim, nil, func(string, []byte) {}, stats)
+	if stats.AbortedByEntries == 0 && stats.AbortedByBytes == 0 {
+		t.Fatalf("expected stats to record entries or bytes aborts; got %+v", *stats)
+	}
+}
+
+func TestScanArchivesWithStats_DepthCounter(t *testing.T) {
+	dir := t.TempDir()
+	inner := filepath.Join(dir, "inner.zip")
+	makeZip(t, inner, map[string]string{"a.txt": "1"})
+	b, err := os.ReadFile(inner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outer := filepath.Join(dir, "outer.zip")
+	makeZip(t, outer, map[string]string{"nested/inner.zip": string(b)})
+
+	stats := &Stats{}
+	lim := Limits{MaxArchiveBytes: 1 << 20, MaxEntries: 100, MaxDepth: 0, TimeBudget: 1 * time.Second}
+	_ = ScanArchivesWithStats(dir, lim, nil, func(string, []byte) {}, stats)
+	if stats.AbortedByDepth == 0 {
+		t.Fatalf("expected depth abort to be recorded; got %+v", *stats)
+	}
+}
+
+func TestScanIaC_TerraformStateSelective(t *testing.T) {
+	dir := t.TempDir()
+	// Small tfstate with sensitive-looking keys
+	state := `{"version":4,"resources":[{"type":"kubernetes_secret","instances":[{"attributes":{"data":{"password":"p@ss","token":"tkn"}}}]}],"outputs":{"api_key":{"value":"abc123"}}}`
+	path := filepath.Join(dir, "terraform.tfstate")
+	if err := os.WriteFile(path, []byte(state), 0644); err != nil {
+		t.Fatal(err)
+	}
+	lim := Limits{MaxArchiveBytes: 1 << 20, MaxEntries: 100, MaxDepth: 1, TimeBudget: 1 * time.Second}
+	var got []string
+	emit := func(p string, b []byte) { got = append(got, p+"::"+string(b)) }
+	if err := ScanIaCWithFilter(dir, lim, nil, emit); err != nil {
+		t.Fatalf("ScanIaCWithFilter error: %v", err)
+	}
+	// Expect emitted kv entries labeled with json paths
+	foundToken := false
+	foundAPIKey := false
+	for _, s := range got {
+		if strings.Contains(s, "json:") && strings.Contains(s, "token") {
+			foundToken = true
+		}
+		if strings.Contains(s, "json:") && strings.Contains(s, "outputs.api_key") {
+			foundAPIKey = true
+		}
+	}
+	if !foundToken || !foundAPIKey {
+		t.Fatalf("expected selective json emissions, got: %v", got)
+	}
+}
+
+func TestScanIaC_Kubeconfig(t *testing.T) {
+	dir := t.TempDir()
+	// Typical kubeconfig filename
+	kc := "apiVersion: v1\nclusters: []\nusers:\n- name: u\n  user:\n    token: abcdef\n"
+	path := filepath.Join(dir, ".kube", "config")
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(kc), 0644); err != nil {
+		t.Fatal(err)
+	}
+	lim := Limits{MaxArchiveBytes: 1 << 20, MaxEntries: 100, MaxDepth: 1, TimeBudget: 1 * time.Second}
+	var got []string
+	emit := func(p string, b []byte) { got = append(got, p+"::"+string(b)) }
+	if err := ScanIaCWithFilter(dir, lim, nil, emit); err != nil {
+		t.Fatalf("ScanIaCWithFilter error: %v", err)
+	}
+	if len(got) == 0 {
+		t.Fatalf("expected emitted kubeconfig content")
+	}
+	if !strings.HasPrefix(got[0], ".kube/config::") {
+		t.Fatalf("expected path prefix .kube/config, got: %v", got[0])
+	}
+}
+
 func itoa(i int) string { return fmtInt(i) }
 
 func fmtInt(i int) string {

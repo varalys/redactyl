@@ -350,7 +350,7 @@ func ScanWithStats(cfg Config) (Result, error) {
 			}
 		}
 		if cfg.ScanIaC {
-			if err := artifacts.ScanIaC(cfg.Root, lim, emitArtifact); err != nil {
+			if err := artifacts.ScanIaCWithFilter(cfg.Root, lim, allowArtifact, emitArtifact); err != nil {
 				_ = fmt.Errorf("iac scan: %w", err)
 			}
 		}
