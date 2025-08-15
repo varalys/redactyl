@@ -22,6 +22,11 @@ import (
 	yaml "gopkg.in/yaml.v3"
 )
 
+// safeClose closes an io.Closer and ignores any error (lint-safe).
+func safeClose(c io.Closer) {
+	_ = c.Close()
+}
+
 // Limits controls bounded deep scanning of artifacts like archives and containers.
 type Limits struct {
 	MaxArchiveBytes int64
@@ -158,7 +163,7 @@ func ScanContainersWithFilter(root string, limits Limits, allow PathAllowFunc, e
 		if oerr != nil {
 			return nil
 		}
-		defer func() { _ = f.Close() }()
+		defer safeClose(f)
 		tr := tar.NewReader(f)
 		for {
 			if r := limitsExceededReason(limits, decompressed, entries, 0, deadline); r != "" {
@@ -187,9 +192,7 @@ func ScanContainersWithFilter(root string, limits Limits, allow PathAllowFunc, e
 				// Limit reader to this entry size and hand off to tar reader using '/' join for layer path
 				lr := &io.LimitedReader{R: tr, N: hdr.Size}
 				vp := rel + "::" + layerID
-				if terr := scanTarReaderJoin(vp, "/", limits, &decompressed, &entries, 1, deadline, emit, lr); terr != nil {
-					// ignore per-entry errors
-				}
+				_ = scanTarReaderJoin(vp, "/", limits, &decompressed, &entries, 1, deadline, emit, lr) //nolint:errcheck
 			}
 		}
 	})
@@ -234,7 +237,7 @@ func ScanContainersWithStats(root string, limits Limits, allow PathAllowFunc, em
 		if err != nil {
 			return nil
 		}
-		defer f.Close()
+		defer safeClose(f)
 		tr := tar.NewReader(f)
 		for {
 			if r := limitsExceededReason(limits, decompressed, entries, 0, deadline); r != "" {
@@ -318,7 +321,7 @@ func ScanIaCWithFilter(root string, limits Limits, allow PathAllowFunc, emit fun
 			if err != nil {
 				return nil
 			}
-			defer f.Close()
+			defer safeClose(f)
 			b, readErr := readAllBounded(f, limits, &decompressed, deadline)
 			if readErr == nil {
 				// Skip selective JSON parsing for very large tfstate to avoid overhead
@@ -353,7 +356,7 @@ func ScanIaCWithFilter(root string, limits Limits, allow PathAllowFunc, emit fun
 			if err != nil {
 				return nil
 			}
-			defer f.Close()
+			defer safeClose(f)
 			b, _ := readAllBounded(f, limits, &decompressed, deadline)
 			if len(b) > 0 {
 				if emitted := tryExtractKubeconfig(rel, b, emit); !emitted {
@@ -435,7 +438,7 @@ func isContainerTar(fullPath string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer f.Close()
+	defer safeClose(f)
 	tr := tar.NewReader(f)
 	for {
 		hdr, err := tr.Next()
@@ -458,7 +461,7 @@ func scanArchiveFile(fullPath string, rel string, limits Limits, decompressed *i
 	if err != nil {
 		return nil
 	}
-	defer f.Close()
+	defer safeClose(f)
 
 	lower := strings.ToLower(rel)
 	switch {
@@ -469,7 +472,7 @@ func scanArchiveFile(fullPath string, rel string, limits Limits, decompressed *i
 		if err != nil {
 			return nil
 		}
-		defer gz.Close()
+		defer safeClose(gz)
 		return scanTarReader(rel, limits, decompressed, entries, depth, deadline, emit, gz)
 	case strings.HasSuffix(lower, ".tar"):
 		return scanTarReader(rel, limits, decompressed, entries, depth, deadline, emit, f)
@@ -479,7 +482,7 @@ func scanArchiveFile(fullPath string, rel string, limits Limits, decompressed *i
 		if err != nil {
 			return nil
 		}
-		defer gz.Close()
+		defer safeClose(gz)
 		name := gz.Name
 		if name == "" {
 			name = strings.TrimSuffix(rel, ".gz")
@@ -527,7 +530,7 @@ func scanZipReader(archivePath string, limits Limits, decompressed *int64, entri
 				continue
 			}
 			b, readErr := readAllBounded(rc, limits, decompressed, deadline)
-			_ = rc.Close()
+			safeClose(rc)
 			if readErr != nil {
 				continue
 			}
@@ -606,7 +609,7 @@ func scanNestedArchive(pathChain string, name string, blob []byte, limits Limits
 				continue
 			}
 			b, readErr := readAllBounded(rc, limits, decompressed, deadline)
-			_ = rc.Close()
+			safeClose(rc)
 			if readErr != nil {
 				continue
 			}
@@ -625,7 +628,7 @@ func scanNestedArchive(pathChain string, name string, blob []byte, limits Limits
 		if err != nil {
 			return nil
 		}
-		defer gz.Close()
+		defer safeClose(gz)
 		return scanTarReader(pathChain, limits, decompressed, entries, depth, deadline, emit, gz)
 	case strings.HasSuffix(lower, ".tar"):
 		return scanTarReader(pathChain, limits, decompressed, entries, depth, deadline, emit, bytes.NewReader(blob))
@@ -634,7 +637,7 @@ func scanNestedArchive(pathChain string, name string, blob []byte, limits Limits
 		if err != nil {
 			return nil
 		}
-		defer gz.Close()
+		defer safeClose(gz)
 		name := gz.Name
 		if name == "" {
 			name = strings.TrimSuffix(filepath.Base(pathChain), ".gz")
@@ -905,7 +908,7 @@ func scanArchiveFileWithStats(fullPath string, rel string, limits Limits, decomp
 	if err != nil {
 		return nil
 	}
-	defer f.Close()
+	defer safeClose(f)
 
 	lower := strings.ToLower(rel)
 	switch {
@@ -916,7 +919,7 @@ func scanArchiveFileWithStats(fullPath string, rel string, limits Limits, decomp
 		if err != nil {
 			return nil
 		}
-		defer gz.Close()
+		defer safeClose(gz)
 		return scanTarReaderWithStats(rel, limits, decompressed, entries, depth, deadline, emit, gz, stats)
 	case strings.HasSuffix(lower, ".tar"):
 		return scanTarReaderWithStats(rel, limits, decompressed, entries, depth, deadline, emit, f, stats)
@@ -925,7 +928,7 @@ func scanArchiveFileWithStats(fullPath string, rel string, limits Limits, decomp
 		if err != nil {
 			return nil
 		}
-		defer gz.Close()
+		defer safeClose(gz)
 		name := gz.Name
 		if name == "" {
 			name = strings.TrimSuffix(rel, ".gz")
@@ -976,7 +979,7 @@ func scanZipReaderWithStats(archivePath string, limits Limits, decompressed *int
 				continue
 			}
 			b, readErr := readAllBounded(rc, limits, decompressed, deadline)
-			_ = rc.Close()
+			safeClose(rc)
 			if readErr != nil {
 				if stats != nil {
 					if r := limitsExceededReason(limits, *decompressed, *entries, depth, deadline); r != "" {
@@ -1068,7 +1071,7 @@ func scanNestedArchiveWithStats(pathChain string, name string, blob []byte, limi
 				continue
 			}
 			b, readErr := readAllBounded(rc, limits, decompressed, deadline)
-			_ = rc.Close()
+			safeClose(rc)
 			if readErr != nil {
 				if stats != nil {
 					if r := limitsExceededReason(limits, *decompressed, *entries, depth, deadline); r != "" {
@@ -1094,7 +1097,7 @@ func scanNestedArchiveWithStats(pathChain string, name string, blob []byte, limi
 		if err != nil {
 			return nil
 		}
-		defer gz.Close()
+		defer safeClose(gz)
 		return scanTarReaderWithStats(pathChain, limits, decompressed, entries, depth, deadline, emit, gz, stats)
 	case strings.HasSuffix(lower, ".tar"):
 		return scanTarReaderWithStats(pathChain, limits, decompressed, entries, depth, deadline, emit, bytes.NewReader(blob), stats)
@@ -1103,7 +1106,7 @@ func scanNestedArchiveWithStats(pathChain string, name string, blob []byte, limi
 		if err != nil {
 			return nil
 		}
-		defer gz.Close()
+		defer safeClose(gz)
 		n := gz.Name
 		if n == "" {
 			n = strings.TrimSuffix(filepath.Base(pathChain), ".gz")

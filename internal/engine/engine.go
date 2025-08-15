@@ -350,13 +350,13 @@ func ScanWithStats(cfg Config) (Result, error) {
 		allowArtifact := func(rel string) bool { return allowedByGlobs(rel, cfg) }
 		var artStats artifacts.Stats
 		if cfg.ScanArchives {
-			_ = artifacts.ScanArchivesWithStats(cfg.Root, lim, allowArtifact, emitArtifact, &artStats)
+			_ = artifacts.ScanArchivesWithStats(cfg.Root, lim, allowArtifact, emitArtifact, &artStats) //nolint:errcheck
 		}
 		if cfg.ScanContainers {
-			_ = artifacts.ScanContainersWithStats(cfg.Root, lim, allowArtifact, emitArtifact, &artStats)
+			_ = artifacts.ScanContainersWithStats(cfg.Root, lim, allowArtifact, emitArtifact, &artStats) //nolint:errcheck
 		}
 		if cfg.ScanIaC {
-			_ = artifacts.ScanIaCWithFilter(cfg.Root, lim, allowArtifact, emitArtifact)
+			_ = artifacts.ScanIaCWithFilter(cfg.Root, lim, allowArtifact, emitArtifact) //nolint:errcheck
 		}
 		result.ArtifactStats = DeepStats{
 			AbortedByBytes:   artStats.AbortedByBytes,
