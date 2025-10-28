@@ -381,22 +381,10 @@ redactyl scan --disable "entropy_context"
 
 Categories and example IDs (run `redactyl detectors` for the full, up-to-date list):
 
-- Cloud & DB URIs:
-  - amqp_uri_creds, aws_access_key, aws_secret_key, azure_storage_key, gcp_service_account_key, mongodb_uri_creds, mysql_uri_creds, postgres_uri_creds, redis_uri_creds, sqlserver_uri_creds
-- CI/CD & developer services:
-  - docker_config_auth, git_credentials_url_secret, github_token, gitlab_token, heroku_api_key, npm_token, npmrc_auth_token, rubygems_credentials, sentry_auth_token, sentry_dsn, terraform_cloud_token
-- Messaging & webhooks:
-  - discord_bot_token, discord_webhook, ifttt_webhook_url, slack_token, slack_webhook, telegram_bot_token, zapier_webhook_url
-- Payments & email:
-  - mailgun_api_key, sendgrid_api_key, stripe_secret, stripe_webhook_secret
-- Google & Firebase:
-  - firebase_api_key, google_api_key
 - AI providers:
-  - ai21_api_key, anthropic_api_key, azure_openai_api_key, cohere_api_key, groq_api_key, mistral_api_key, openai_api_key, openrouter_api_key, perplexity_api_key, replicate_api_token, stability_api_key
-- AI tooling & vector DBs:
-  - huggingface_token, kaggle_json_key, pinecone_api_key, qdrant_api_key, wandb_api_key, weaviate_api_key
+  - anthropic-api-key, openai-api-key
 - Other common services:
-  - airtable_pat, azure_sas_token, cloudflare_token, cloudinary_url_creds, databricks_pat, datadog_api_key, datadog_app_key, digitalocean_pat, dockerhub_pat, entropy_context, flyio_access_token, hasura_admin_secret, jwt, linear_api_key, mapbox_token, netlify_build_hook, netlify_token, newrelic_api_key, notion_api_key, okta_api_token, posthog_personal_key, posthog_project_key, prisma_data_proxy_url, private_key_block, pypi_token, render_api_key, shopify_token, snyk_token, supabase_service_role_key, twilio_account_sid, twilio_api_key_secret_like, twilio_api_key_sid, twilio_auth_token, vercel_token
+  - aws-access-key, aws-mws-key, aws-secret-key, docker-config-auth, gcp-service-account, generic-api-key, github-app-token, github-fine-grained-pat, github-oauth, github-pat, gitlab-pat, gitlab-pipeline-token, gitlab-runner-token, google-api-key, google-oauth, jwt, npm-access-token, private-key, pypi-token, sendgrid-api-key, slack-app-token, slack-bot-token, slack-webhook-url, stripe-access-token, stripe-secret-key
 <!-- END:DETECTORS_CATEGORIES -->
 
 ## How detection works
