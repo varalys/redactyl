@@ -103,7 +103,7 @@ We're building a **specialized artifact scanner** that finds secrets in the comp
 ✅ Enhanced container scanning
 ✅ Helm + Kubernetes support
 ✅ Updated documentation
-📝 Blog post: "Why Redactyl uses Gitleaks"
+- Blog post: "Why Redactyl uses Gitleaks"
 
 ---
 
@@ -186,7 +186,7 @@ We're building a **specialized artifact scanner** that finds secrets in the comp
 ✅ CI/CD integrations (3+ platforms)
 ✅ Webhook automation
 ✅ First 10 paying customers
-📝 Case study with design partner
+- Case study with design partner
 
 ---
 
@@ -267,8 +267,8 @@ We're building a **specialized artifact scanner** that finds secrets in the comp
 ✅ Policy engine with compliance packs
 ✅ SSO + RBAC
 ✅ 50 paying customers
-📝 Security whitepaper
-📝 SOC2 Type 1 certification (if hosted)
+- Security whitepaper
+- SOC2 Type 1 certification (if hosted)
 
 ---
 
@@ -353,8 +353,8 @@ We're building a **specialized artifact scanner** that finds secrets in the comp
 ✅ Dependency tree analysis
 ✅ Advanced analytics dashboard
 ✅ 100+ paying customers
-📝 KubeCon presentation
-📝 Year-in-review blog post
+- KubeCon presentation
+- Year-in-review blog post
 
 ---
 
