@@ -1,0 +1,125 @@
+name: Integration Tests
+
+on:
+  pull_request:
+    branches: [ main, pivot-buildout ]
+  push:
+    branches: [ main ]
+  schedule:
+    # Run nightly at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      test_category:
+        description: 'Test category to run (empty = all)'
+        required: false
+        default: ''
+
+jobs:
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+
+      - name: Install Gitleaks
+        run: |
+          wget -q https://github.com/gitleaks/gitleaks/releases/download/v8.18.0/gitleaks_8.18.0_linux_x64.tar.gz
+          tar -xzf gitleaks_8.18.0_linux_x64.tar.gz
+          sudo mv gitleaks /usr/local/bin/
+          gitleaks version
+
+      - name: Install Helm
+        run: |
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+          helm version
+
+      - name: Build Redactyl
+        run: make build
+
+      - name: Generate test fixtures
+        run: ./test/integration/scripts/generate-fixtures.sh
+
+      - name: Run integration tests (fast suite)
+        if: github.event_name == 'pull_request'
+        run: |
+          ./test/integration/run-tests.sh baseline
+          ./test/integration/run-tests.sh archives
+          ./test/integration/run-tests.sh helm
+          ./test/integration/run-tests.sh k8s
+        env:
+          SKIP_DOWNLOAD: "1"
+
+      - name: Run integration tests (full suite)
+        if: github.event_name == 'push' || github.event_name == 'schedule'
+        run: ./test/integration/run-tests.sh
+        env:
+          VERBOSE: "1"
+
+      - name: Run custom test category
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.test_category != ''
+        run: ./test/integration/run-tests.sh ${{ github.event.inputs.test_category }}
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: test/integration/results/
+          retention-days: 7
+
+      - name: Comment PR with results
+        if: github.event_name == 'pull_request' && failure()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '❌ Integration tests failed. Check the workflow logs for details.'
+            })
+
+  performance-benchmarks:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+
+      - name: Install dependencies
+        run: |
+          wget -q https://github.com/gitleaks/gitleaks/releases/download/v8.18.0/gitleaks_8.18.0_linux_x64.tar.gz
+          tar -xzf gitleaks_8.18.0_linux_x64.tar.gz
+          sudo mv gitleaks /usr/local/bin/
+
+      - name: Build Redactyl
+        run: make build
+
+      - name: Run performance tests
+        run: ./test/integration/run-tests.sh performance
+        env:
+          VERBOSE: "1"
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-benchmarks
+          path: test/integration/results/
+          retention-days: 30

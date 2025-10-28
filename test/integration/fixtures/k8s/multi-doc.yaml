@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  config.yaml: |
+    api_url: https://api.example.com
+    # WARNING: Secret in ConfigMap!
+    admin_token: "tok_admin_1234567890abcdefghijklmnopqrst"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-credentials
+type: Opaque
+stringData:
+  username: admin
+  password: "SuperSecretPassword123!"
+  connection-string: "Server=db.example.com;Database=prod;User Id=admin;Password=SuperSecretPassword123!;"

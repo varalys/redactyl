@@ -15,7 +15,9 @@ import (
 
 func TestCLI_JSON_Shape_ExitCodes(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "secrets.txt"), []byte("api_key=sk-abcdefghijklmnopqrstuvwxyz0123"), 0644); err != nil {
+	// Use a pattern that Gitleaks will detect with medium/low severity
+	// Pattern with lower entropy (3.5-4.5 range) will map to medium confidence → medium severity
+	if err := os.WriteFile(filepath.Join(dir, "secrets.txt"), []byte("token = abc123def456abc123def456abc12"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	// run as subprocess to avoid os.Exit in-process
@@ -291,9 +293,9 @@ func TestCLI_Artifacts_IncludeExclude_EndToEnd(t *testing.T) {
 	}
 	keepZip := filepath.Join(dir, "keep", "allowed.zip")
 	dropZip := filepath.Join(dir, "drop", "blocked.zip")
-	// Content likely to trigger a detector (GitHub token-like)
-	makeZip(keepZip, map[string]string{"a.txt": "token ghp_ABCDEFGHIJKLMNOPQRST1234567890ab"})
-	makeZip(dropZip, map[string]string{"b.txt": "token ghp_ABCDEFGHIJKLMNOPQRST1234567890ab"})
+	// Content that Gitleaks will detect (generic-api-key with high entropy and assignment)
+	makeZip(keepZip, map[string]string{"a.txt": "token = ghp_ABCDEFGHIJKLMNOPQRST1234567890ab"})
+	makeZip(dropZip, map[string]string{"b.txt": "token = ghp_ABCDEFGHIJKLMNOPQRST1234567890ab"})
 	cmd := exec.Command("go", "run", ".", "scan", "--json", "--json-extended", "--archives", "--include", "**/allowed*", "--exclude", "**/blocked*", "--fail-on", "high", "-p", dir)
 	cmd.Dir = filepath.Clean(filepath.Join("..", ".."))
 	var out bytes.Buffer
@@ -338,7 +340,8 @@ func TestCLI_Containers_Smoke_JSONExtended(t *testing.T) {
 	_, _ = tw.Write([]byte(man))
 	var layerBuf bytes.Buffer
 	ltw := tar.NewWriter(&layerBuf)
-	content := "api_key=sk-abcdefghijklmnopqrstuvwxyz0123"
+	// Use a pattern that Gitleaks will detect (medium entropy → medium severity, won't fail on high)
+	content := "api_key = abc123def456abc123def456abc12"
 	_ = ltw.WriteHeader(&tar.Header{Name: "etc/app.txt", Mode: 0600, Size: int64(len(content))})
 	_, _ = ltw.Write([]byte(content))
 	_ = ltw.Close()

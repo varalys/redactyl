@@ -1,0 +1,15 @@
+replicaCount: 1
+
+image:
+  repository: nginx
+  tag: "1.21"
+
+# WARNING: These are test secrets!
+secrets:
+  databasePassword: "SuperSecretDBPassword123!"
+  apiKey: "sk_test_1234567890abcdefghijklmnopqrstuvwxyz"
+  githubToken: "ghp_TestTokenForIntegrationTesting123456789"
+
+service:
+  type: ClusterIP
+  port: 80

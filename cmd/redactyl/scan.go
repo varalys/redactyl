@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/redactyl/redactyl/internal/config"
-	"github.com/redactyl/redactyl/internal/detectors"
 	"github.com/redactyl/redactyl/internal/engine"
 	"github.com/redactyl/redactyl/internal/report"
 	"github.com/redactyl/redactyl/internal/types"
@@ -33,13 +32,12 @@ var (
 	flagNoUploadMeta bool
 	flagTable        bool
 	flagText         bool
-	flagNoValidators bool
-	flagNoStructured bool
-	flagVerify       string
 	// deep scanning toggles and limits
 	flagArchives             bool
 	flagContainers           bool
 	flagIaC                  bool
+	flagHelm                 bool
+	flagK8s                  bool
 	flagMaxArchiveBytes      int64
 	flagMaxEntries           int
 	flagMaxDepth             int
@@ -72,13 +70,12 @@ func init() {
 	cmd.Flags().BoolVar(&flagNoUploadMeta, "no-upload-metadata", false, "do not include repo/commit/branch in upload envelope")
 	cmd.Flags().BoolVar(&flagTable, "table", false, "output in table format with borders (now default)")
 	cmd.Flags().BoolVar(&flagText, "text", false, "output in plain text columnar format")
-	cmd.Flags().BoolVar(&flagNoValidators, "no-validators", false, "disable post-detection validator heuristics")
-	cmd.Flags().BoolVar(&flagNoStructured, "no-structured", false, "disable structured JSON/YAML key scanning")
-	cmd.Flags().StringVar(&flagVerify, "verify", "off", "soft verify mode: off|safe|custom")
 	// deep scanning flags
 	cmd.Flags().BoolVar(&flagArchives, "archives", false, "enable deep scanning of archives (zip/tar/gz)")
 	cmd.Flags().BoolVar(&flagContainers, "containers", false, "enable deep scanning of container tarballs (Docker save)")
 	cmd.Flags().BoolVar(&flagIaC, "iac", false, "enable scanning IaC hotspots (tfstate, kubeconfigs)")
+	cmd.Flags().BoolVar(&flagHelm, "helm", false, "enable scanning Helm charts (.tgz archives and directories)")
+	cmd.Flags().BoolVar(&flagK8s, "k8s", false, "enable scanning Kubernetes manifests (YAML files)")
 	cmd.Flags().Int64Var(&flagMaxArchiveBytes, "max-archive-bytes", 32<<20, "max decompressed bytes per artifact before aborting")
 	cmd.Flags().IntVar(&flagMaxEntries, "max-entries", 1000, "max entries per archive/container before aborting")
 	cmd.Flags().IntVar(&flagMaxDepth, "max-depth", 2, "max recursion depth for nested archives")
@@ -149,40 +146,13 @@ func runScan(cmd *cobra.Command, _ []string) error {
 		ScanArchives:         pickBool(flagArchives, lcfg.Archives, gcfg.Archives),
 		ScanContainers:       pickBool(flagContainers, lcfg.Containers, gcfg.Containers),
 		ScanIaC:              pickBool(flagIaC, lcfg.IaC, gcfg.IaC),
+		ScanHelm:             pickBool(flagHelm, lcfg.Helm, gcfg.Helm),
+		ScanK8s:              pickBool(flagK8s, lcfg.K8s, gcfg.K8s),
 		MaxArchiveBytes:      pickInt64(flagMaxArchiveBytes, lcfg.MaxArchiveBytes, gcfg.MaxArchiveBytes),
 		MaxEntries:           pickInt(flagMaxEntries, lcfg.MaxEntries, gcfg.MaxEntries),
 		MaxDepth:             pickInt(flagMaxDepth, lcfg.MaxDepth, gcfg.MaxDepth),
 		ScanTimeBudget:       budget,
 		GlobalArtifactBudget: globalBudget,
-	}
-
-	// toggles: CLI overrides config when present
-	nv := pickBool(flagNoValidators, lcfg.NoValidators, gcfg.NoValidators)
-	ns := pickBool(flagNoStructured, lcfg.NoStructured, gcfg.NoStructured)
-	detectors.EnableValidators = !nv
-	detectors.EnableStructured = !ns
-	// verify: CLI > local > global
-	if v := pickString(flagVerify, lcfg.VerifyMode, gcfg.VerifyMode); v != "" {
-		detectors.VerifyMode = v
-	}
-	// per-detector disable lists (optional, comma-separated)
-	if lcfg.DisableValidators != nil || gcfg.DisableValidators != nil {
-		ids := pickString("", lcfg.DisableValidators, gcfg.DisableValidators)
-		for _, id := range strings.Split(ids, ",") {
-			id = strings.TrimSpace(id)
-			if id != "" {
-				detectors.DisabledValidatorsIDs[id] = true
-			}
-		}
-	}
-	if lcfg.DisableStructured != nil || gcfg.DisableStructured != nil {
-		ids := pickString("", lcfg.DisableStructured, gcfg.DisableStructured)
-		for _, id := range strings.Split(ids, ",") {
-			id = strings.TrimSpace(id)
-			if id != "" {
-				detectors.DisabledStructuredIDs[id] = true
-			}
-		}
 	}
 
 	// Friendly banner before scanning

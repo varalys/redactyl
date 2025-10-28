@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/redactyl/redactyl/internal/detectors"
+	"github.com/redactyl/redactyl/internal/engine"
 	"github.com/spf13/cobra"
 )
 
@@ -32,7 +32,7 @@ func init() {
 			}
 
 			// Simple categorization rules (keep in sync lightly; this is best-effort)
-			ids := detectors.IDs()
+			ids := engine.DetectorIDs()
 			var cloud, dburi, cicd, msg, pay, gcloud, aiproviders, aitools, other []string
 			for _, id := range ids {
 				switch {

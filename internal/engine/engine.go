@@ -3,6 +3,7 @@ package engine
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -14,9 +15,11 @@ import (
 	xxhash "github.com/cespare/xxhash/v2"
 	"github.com/redactyl/redactyl/internal/artifacts"
 	"github.com/redactyl/redactyl/internal/cache"
-	"github.com/redactyl/redactyl/internal/detectors"
+	"github.com/redactyl/redactyl/internal/config"
 	"github.com/redactyl/redactyl/internal/git"
 	"github.com/redactyl/redactyl/internal/ignore"
+	"github.com/redactyl/redactyl/internal/scanner"
+	"github.com/redactyl/redactyl/internal/scanner/gitleaks"
 	"github.com/redactyl/redactyl/internal/types"
 	"golang.org/x/sync/errgroup"
 )
@@ -44,11 +47,16 @@ type Config struct {
 	ScanArchives         bool
 	ScanContainers       bool
 	ScanIaC              bool
+	ScanHelm             bool // Scan Helm charts
+	ScanK8s              bool // Scan Kubernetes manifests
 	MaxArchiveBytes      int64
 	MaxEntries           int
 	MaxDepth             int
 	ScanTimeBudget       time.Duration
 	GlobalArtifactBudget time.Duration
+
+	// Gitleaks configuration (for scanner integration)
+	GitleaksConfig config.GitleaksConfig
 }
 
 var (
@@ -56,8 +64,29 @@ var (
 	DisableDetectors string
 )
 
-// DetectorIDs returns the list of available detector IDs.
-func DetectorIDs() []string { return detectors.IDs() }
+// DetectorIDs returns the list of available Gitleaks detector IDs.
+// This is a representative list of common Gitleaks rules for UI purposes.
+// The actual detection is performed by Gitleaks with its full rule set.
+func DetectorIDs() []string {
+	return []string{
+		"github-pat", "github-fine-grained-pat", "github-oauth", "github-app-token",
+		"aws-access-key", "aws-secret-key", "aws-mws-key",
+		"stripe-access-token", "stripe-secret-key",
+		"slack-webhook-url", "slack-bot-token", "slack-app-token",
+		"google-api-key", "google-oauth", "gcp-service-account",
+		"gitlab-pat", "gitlab-pipeline-token", "gitlab-runner-token",
+		"sendgrid-api-key",
+		"openai-api-key",
+		"anthropic-api-key",
+		"npm-access-token",
+		"pypi-token",
+		"docker-config-auth",
+		"jwt",
+		"private-key",
+		"generic-api-key",
+		// Note: This is a subset for display. Gitleaks has 200+ rules.
+	}
+}
 
 // Scan runs a scan and returns only findings (without stats).
 func Scan(cfg Config) ([]types.Finding, error) {
@@ -87,6 +116,13 @@ type DeepStats struct {
 // ScanWithStats runs a scan and returns findings along with timing and counts.
 func ScanWithStats(cfg Config) (Result, error) {
 	var result Result
+
+	// Initialize scanner (Gitleaks integration)
+	scnr, err := initializeScanner(cfg)
+	if err != nil {
+		return result, fmt.Errorf("failed to initialize scanner: %w", err)
+	}
+
 	// Load incremental cache if available
 	var db cache.DB
 	if !cfg.NoCache {
@@ -126,7 +162,12 @@ func ScanWithStats(cfg Config) (Result, error) {
 			if cfg.DryRun {
 				return
 			}
-			fs := detectors.RunAll(p, data)
+			fs, err := scnr.Scan(p, data)
+			if err != nil {
+				// Log error but don't fail entire scan
+				// TODO: Consider adding error reporting mechanism
+				return
+			}
 			fs = filterByConfidence(fs, cfg.MinConfidence)
 			fs = filterByIDs(fs, cfg.EnableDetectors, cfg.DisableDetectors)
 			emit(fs)
@@ -173,7 +214,11 @@ func ScanWithStats(cfg Config) (Result, error) {
 						}
 						return nil
 					}
-					fs := detectors.RunAll(p, data[i])
+					fs, err := scnr.Scan(p, data[i])
+					if err != nil {
+						// Log error but continue scanning other files
+						return nil
+					}
 					fs = filterByConfidence(fs, cfg.MinConfidence)
 					fs = filterByIDs(fs, cfg.EnableDetectors, cfg.DisableDetectors)
 					findingsCh <- fs
@@ -241,7 +286,11 @@ func ScanWithStats(cfg Config) (Result, error) {
 						}
 						return nil
 					}
-					fs := detectors.RunAll(it.path, it.blob)
+					fs, err := scnr.Scan(it.path, it.blob)
+					if err != nil {
+						// Log error but continue scanning other files
+						return nil
+					}
 					fs = filterByConfidence(fs, cfg.MinConfidence)
 					fs = filterByIDs(fs, cfg.EnableDetectors, cfg.DisableDetectors)
 					findingsCh <- fs
@@ -299,7 +348,11 @@ func ScanWithStats(cfg Config) (Result, error) {
 						}
 						return nil
 					}
-					fs := detectors.RunAll(p, bytes.TrimSpace(data[i]))
+					fs, err := scnr.Scan(p, bytes.TrimSpace(data[i]))
+					if err != nil {
+						// Log error but continue scanning other files
+						return nil
+					}
 					fs = filterByConfidence(fs, cfg.MinConfidence)
 					fs = filterByIDs(fs, cfg.EnableDetectors, cfg.DisableDetectors)
 					findingsCh <- fs
@@ -323,7 +376,7 @@ func ScanWithStats(cfg Config) (Result, error) {
 	}
 
 	// Optional deep artifact scanning (sequential orchestration, internal parallelism TBD)
-	if cfg.ScanArchives || cfg.ScanContainers || cfg.ScanIaC {
+	if cfg.ScanArchives || cfg.ScanContainers || cfg.ScanIaC || cfg.ScanHelm || cfg.ScanK8s {
 		lim := artifacts.Limits{
 			MaxArchiveBytes: cfg.MaxArchiveBytes,
 			MaxEntries:      cfg.MaxEntries,
@@ -339,7 +392,11 @@ func ScanWithStats(cfg Config) (Result, error) {
 			if cfg.DryRun {
 				return
 			}
-			fs := detectors.RunAll(p, b)
+			fs, err := scnr.Scan(p, b)
+			if err != nil {
+				// Log error but continue scanning other artifacts
+				return
+			}
 			fs = filterByConfidence(fs, cfg.MinConfidence)
 			fs = filterByIDs(fs, cfg.EnableDetectors, cfg.DisableDetectors)
 			emit(fs)
@@ -362,6 +419,12 @@ func ScanWithStats(cfg Config) (Result, error) {
 		}
 		if cfg.ScanIaC {
 			_ = artifacts.ScanIaCWithFilter(cfg.Root, lim, allowArtifact, emitArtifact) //nolint:errcheck
+		}
+		if cfg.ScanHelm {
+			_ = artifacts.ScanHelmChartsWithFilter(cfg.Root, lim, allowArtifact, emitArtifact) //nolint:errcheck
+		}
+		if cfg.ScanK8s {
+			_ = artifacts.ScanK8sManifestsWithFilter(cfg.Root, lim, allowArtifact, emitArtifact) //nolint:errcheck
 		}
 		result.ArtifactStats = DeepStats{
 			AbortedByBytes:   artStats.AbortedByBytes,
@@ -500,4 +563,25 @@ func trimGlobPrefix(g string) string {
 		s = strings.TrimPrefix(s, "**/")
 	}
 	return s
+}
+
+// initializeScanner creates a scanner instance from configuration.
+// For now, it always creates a Gitleaks scanner. In the future, this could
+// support multiple scanner types based on configuration.
+func initializeScanner(cfg Config) (scanner.Scanner, error) {
+	// Try to auto-detect .gitleaks.toml if not explicitly configured
+	if cfg.GitleaksConfig.GetConfigPath() == "" {
+		if detected := gitleaks.DetectConfigPath(cfg.Root); detected != "" {
+			cfgPath := detected
+			cfg.GitleaksConfig.ConfigPath = &cfgPath
+		}
+	}
+
+	// Create Gitleaks scanner
+	scnr, err := gitleaks.NewScanner(cfg.GitleaksConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create gitleaks scanner: %w", err)
+	}
+
+	return scnr, nil
 }

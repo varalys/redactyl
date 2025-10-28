@@ -4,13 +4,58 @@
 
 **Timeline:** Q1 2025 (12 weeks)
 
+**Last Updated:** 2025-10-28
+
 ---
 
-## Phase 1: Gitleaks Integration (Weeks 1-4)
+## 🎉 IMPLEMENTATION COMPLETE
 
-### Week 1: Foundation & Binary Management
+**Status:** All Q1 2025 milestones completed successfully!
 
-#### 1.1 Create Scanner Interface
+### What Was Delivered
+
+✅ **Phase 1: Gitleaks Integration (Weeks 1-4)** - COMPLETE
+- Scanner interface abstraction with `Scanner` and `ScanContext`
+- Gitleaks binary integration via subprocess
+- Virtual path preservation for nested artifacts
+- Config system updated with `gitleaks:` section
+- All integration tests passing
+
+✅ **Phase 2: Enhanced Container Scanning (Weeks 5-8)** - COMPLETE
+- Full OCI Image Spec v1 support (OCIManifest, OCIIndex, OCIConfig)
+- Rich layer context with BuildLayerContext function
+- Multi-arch image detection
+- Streaming architecture maintained (zero disk extraction)
+
+✅ **Phase 3: Kubernetes & Helm Support (Weeks 9-12)** - COMPLETE
+- Helm chart scanning (.tgz archives and directories)
+- Kubernetes manifest detection and scanning
+- Auto-detection by structure and naming
+- CLI flags `--helm` and `--k8s`
+- Full config file support
+- 4 comprehensive E2E integration tests
+
+### Deferred to Q2
+
+The following items were deprioritized in favor of completing core features:
+- Container registry manifest inspection → Q2 Milestone 2.1
+- Gitleaks auto-download mechanism → Q2 (manual install required for now)
+- Kustomize support → Low priority
+- Helm template rendering → v1 scans raw templates
+
+### Current Branch
+
+`pivot-buildout` - Ready to merge to `main` for v1.0 release
+
+---
+
+## Phase 1: Gitleaks Integration (Weeks 1-4) ✅ COMPLETED
+
+**Status:** All milestones completed. Gitleaks integration shipped.
+
+### Week 1: Foundation & Binary Management ✅
+
+#### 1.1 Create Scanner Interface ✅
 **File:** `internal/scanner/scanner.go`
 
 ```go
@@ -39,9 +84,9 @@ type ScanContext struct {
 ```
 
 **Tasks:**
-- [ ] Define Scanner interface
-- [ ] Define ScanContext struct
-- [ ] Add context helpers (ParseVirtualPath, BuildVirtualPath)
+- [x] Define Scanner interface
+- [x] Define ScanContext struct
+- [x] Add context helpers (ParseVirtualPath, BuildVirtualPath)
 
 #### 1.2 Gitleaks Binary Manager
 **File:** `internal/scanner/gitleaks/binary.go`
@@ -947,16 +992,17 @@ func ScanResource(r Resource, scanner scanner.Scanner) ([]types.Finding, error) 
 
 ---
 
-## Migration Plan for Existing Code
+## Migration Plan - COMPLETED ✅
 
-### What to Delete (After Phase 1 Complete)
-- [ ] `/internal/detectors/` - All 82 detector files
-- [ ] `/internal/validate/` - Gitleaks handles validation
-- [ ] `cmd/redactyl/detectors.go` - Detectors command
-- [ ] `cmd/redactyl/testdetector.go` - Test detector command
+### Deleted (Legacy Code Cleanup - October 2025)
+- ✅ `/internal/detectors/` - All 150+ detector files (removed)
+- ✅ `cmd/redactyl/testdetector.go` - Test detector command (removed)
+- ✅ Legacy CLI flags: `--no-validators`, `--no-structured`, `--verify` (removed)
+- ⚠️ `/internal/validate/` - Kept (still used for non-detection validation)
+- ⚠️ `cmd/redactyl/detectors.go` - Kept (lists available Gitleaks rules)
 
-### What to Keep
-- ✅ `/internal/artifacts/` - Core differentiator
+### What Was Kept
+- ✅ `/internal/artifacts/` - Core differentiator (Helm, K8s, OCI, archives)
 - ✅ `/internal/ctxparse/` - Adds value on top of Gitleaks
 - ✅ `/internal/engine/` - Orchestration layer
 - ✅ `/internal/config/` - Config management

@@ -1,6 +1,8 @@
 # Getting Started with Redactyl Development
 
-**For developers working on the Gitleaks integration and artifact scanning pivot**
+**For developers working on Redactyl - the deep artifact scanner for cloud-native environments**
+
+**Last Updated:** 2025-10-28
 
 ---
 
@@ -9,32 +11,38 @@
 **Read these first:**
 1. `/CLAUDE.md` - Strategic context, decisions, and project direction
 2. `/ROADMAP.md` - Product roadmap with quarterly milestones
-3. `/docs/IMPLEMENTATION_PLAN.md` - Detailed technical implementation plan
+3. `/docs/IMPLEMENTATION_PLAN.md` - Technical implementation history
 
-**TL;DR:** We're pivoting from custom secret detection to being a specialized deep artifact scanner powered by Gitleaks. Focus: container images, Helm charts, K8s manifests, and complex nested artifacts.
+**TL;DR:** Redactyl is a specialized deep artifact scanner powered by Gitleaks. We scan container images, Helm charts, K8s manifests, and complex nested artifacts where traditional scanners can't reach.
 
 ---
 
-## Current State (Before You Start)
+## Current State (Q1 2025 Complete ✅)
 
 ### What Works Today
-- ✅ Basic secret scanning with 80+ custom detectors
+- ✅ Gitleaks-powered secret detection (via scanner interface)
 - ✅ Archive streaming (zip, tar, tgz) without disk extraction
-- ✅ Container image scanning (Docker save format)
-- ✅ Virtual paths for nested artifacts
+- ✅ Container image scanning (Docker save format + OCI)
+- ✅ Helm chart scanning (.tgz and directories)
+- ✅ Kubernetes manifest scanning (auto-detection)
+- ✅ Virtual paths for nested artifacts (`archive::layer::file`)
 - ✅ SARIF output, JSON output, remediation commands
+- ✅ Rich layer context (OCI support, BuildLayerContext)
+- ✅ Config precedence: CLI > local .redactyl.yaml > global config
+- ✅ Comprehensive integration tests (E2E with real Gitleaks)
 
-### What We're Changing
-- 🔄 Replacing custom detectors with Gitleaks integration
-- 🔄 Adding Helm chart scanning
-- 🔄 Adding Kubernetes manifest detection
-- 🔄 Enhancing container scanning (OCI format, layer context)
+### Current Focus (Q2 2025)
+- 🎯 Registry integration (Docker Hub, GCR, ECR, ACR)
+- 🎯 CI/CD platform integrations
+- 🎯 Webhook automation
+- 🎯 Performance optimization (caching, parallel scanning)
 
-### What We're Keeping
-- ✅ Artifact streaming engine (`internal/artifacts/`)
-- ✅ Virtual path system
-- ✅ Remediation suite (`fix`, `purge` commands)
-- ✅ SARIF/JSON output formats
+### Technology Stack
+- Go 1.25+
+- Gitleaks binary (detection engine)
+- OCI Image Spec v1 (container scanning)
+- Helm (chart scanning)
+- Kubernetes YAML parsing
 
 ---
 
@@ -97,85 +105,73 @@ redactyl/
 
 ---
 
-## Current Development Focus: Gitleaks Integration
+## Current Development Focus: Q2 2025 - Registry Integration
 
-**Goal:** Replace custom detectors with Gitleaks binary integration (12 weeks)
+**Goal:** Enable scanning of container registries without pulling images (Weeks 13-17)
 
-### Phase 1: Core Integration (Weeks 1-4) - **START HERE**
+**Branch:** `main` (Q1 complete, ready for Q2 work)
 
-#### Week 1: Scanner Interface
-**Branch:** `feature/gitleaks-integration`
+### Getting Started with Q2 Development
 
-**Tasks:**
-1. Create `internal/scanner/scanner.go` interface
-2. Create `internal/scanner/gitleaks/binary.go` (binary detection/download)
-3. Update `internal/config/config.go` to add Gitleaks config section
-4. Write unit tests
+#### Milestone 2.1: Docker Registry Integration
+
+**What to build:**
+1. Registry connector framework (`internal/registry/`)
+2. Docker Hub, GCR, ECR, ACR API integration
+3. Layer streaming via registry API
+4. Layer cache (content-addressed)
+5. CLI commands: `redactyl scan-registry`, `redactyl scan-image --registry`
 
 **How to start:**
 ```bash
-git checkout -b feature/gitleaks-integration
+# Create feature branch
+git checkout main
+git pull origin main
+git checkout -b feature/registry-integration
 
-# Create scanner interface
-mkdir -p internal/scanner/gitleaks
-touch internal/scanner/scanner.go
-touch internal/scanner/gitleaks/binary.go
-touch internal/scanner/gitleaks/scanner.go
+# Create registry package
+mkdir -p internal/registry
+touch internal/registry/client.go
+touch internal/registry/dockerhub.go
+touch internal/registry/gcr.go
 
-# Run tests as you go
-go test ./internal/scanner/...
+# Reference the roadmap
+less ROADMAP.md  # See Q2 Milestone 2.1
 ```
 
-**Reference implementation:** See `/docs/IMPLEMENTATION_PLAN.md` Phase 1, Week 1
+**Key Technical Challenges:**
+- Streaming tar layers from HTTP without downloading full blob
+- Layer caching strategy (SHA256-based deduplication)
+- Authentication for private registries (Docker config, tokens)
+- Parallel scanning of multiple images
 
-#### Week 2: Gitleaks Scanner Implementation
-**Tasks:**
-1. Implement `internal/scanner/gitleaks/scanner.go`
-2. Write tests with real Gitleaks binary
-3. Add virtual path remapping logic
-4. Test JSON parsing from Gitleaks output
+**Reference Docs:**
+- [Docker Registry HTTP API V2](https://docs.docker.com/registry/spec/api/)
+- [OCI Distribution Spec](https://github.com/opencontainers/distribution-spec)
 
-**Testing:**
-```bash
-# Create test file with known secret
-echo 'aws_access_key_id = AKIAIOSFODNN7EXAMPLE' > /tmp/test-secret.txt
+### For New Contributors
 
-# Test Gitleaks directly
-gitleaks detect --no-git --source /tmp/test-secret.txt
+If you're new to the project, start with smaller tasks:
 
-# Test your scanner implementation
-go test ./internal/scanner/gitleaks -v -run TestScanWithGitleaks
-```
+**Good First Issues:**
+1. Add more integration tests for Helm/K8s scanning
+2. Improve error messages (user-facing strings)
+3. Add benchmarks for artifact scanning performance
+4. Documentation improvements (examples, tutorials)
+5. Implement Gitleaks auto-download (deferred from Q1)
 
-#### Week 3: Engine Integration
-**Tasks:**
-1. Update `internal/engine/engine.go` to use scanner interface
-2. Update `internal/artifacts/artifacts.go` to pass scanner to functions
-3. Replace all `detectors.RunAll()` calls with `scanner.Scan()`
-4. Update tests
-
-**Before:**
-```go
-findings := detectors.RunAll(path, data)
-```
-
-**After:**
-```go
-findings, err := e.scanner.Scan(path, data)
-```
-
-#### Week 4: CLI Updates
-**Tasks:**
-1. Remove `--enable`, `--disable`, `--min-confidence` flags
-2. Remove `cmd/redactyl/detectors.go` (detectors command)
-3. Update help text and examples
-4. Write migration guide
+**Where to look:**
+- `cmd/redactyl/e2e_helm_k8s_test.go` - Add more test cases
+- `internal/artifacts/` - Add performance benchmarks
+- `docs/` - Improve user documentation
 
 ---
 
 ## Testing Guidelines
 
-### Unit Tests
+### Unit Tests (Fast, ~10s)
+Component-level Go tests for individual packages.
+
 ```bash
 # Test specific package
 go test ./internal/scanner/gitleaks -v
@@ -183,15 +179,41 @@ go test ./internal/scanner/gitleaks -v
 # Test with coverage
 go test ./internal/scanner/... -cover
 
-# Run all tests
+# Run all unit tests
 make test
 ```
 
-### Integration Tests
+### Integration Tests (Real Artifacts, ~2-5min)
+**NEW:** End-to-end tests with real artifacts to validate the entire system.
+
 ```bash
-# E2E CLI tests (requires built binary)
+# Run all integration tests
+./test/integration/run-tests.sh
+
+# Run specific category
+./test/integration/run-tests.sh baseline    # Fast, always run first
+./test/integration/run-tests.sh helm        # Helm charts
+./test/integration/run-tests.sh k8s         # Kubernetes manifests
+./test/integration/run-tests.sh containers  # Docker images
+
+# Verbose output
+VERBOSE=1 ./test/integration/run-tests.sh
+```
+
+**Why integration tests?**
+- Test with real Gitleaks binary (not mocked)
+- Verify actual OCI images, Helm charts, K8s YAML
+- Catch edge cases Go unit tests miss
+- Performance validation with large artifacts
+- Regression detection from real-world scenarios
+
+**Read:** [`test/integration/TESTING_GUIDE.md`](../../test/integration/TESTING_GUIDE.md) for comprehensive guide
+
+### Go Integration Tests (Legacy)
+```bash
+# E2E CLI tests in Go (still useful for quick checks)
 make build
-go test ./cmd/redactyl -v -tags=integration
+go test ./cmd/redactyl -v -run TestCLI_Helm_Chart_Directory
 
 # Test with real artifacts
 ./bin/redactyl scan --archives testdata/sample.zip

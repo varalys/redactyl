@@ -1,0 +1,11 @@
+# Downloaded artifacts (can be regenerated)
+downloads/
+!downloads/.gitkeep
+
+# Test results
+results/
+!results/.gitkeep
+
+# Temporary files
+*.tmp
+*.log

@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp
+  namespace: default
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: myapp
+  template:
+    metadata:
+      labels:
+        app: myapp
+    spec:
+      containers:
+      - name: myapp
+        image: myapp:latest
+        env:
+        # BAD PRACTICE: Hardcoded secrets in env
+        - name: DATABASE_PASSWORD
+          value: "HardcodedDBPass123!"
+        - name: API_TOKEN
+          value: "tok_prod_1234567890abcdefghijklmnopqrstuvwxyz"
+        - name: STRIPE_KEY
+          value: "sk_live_1234567890abcdefghijklmnopqrstuvwxyzABCDEF"

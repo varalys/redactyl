@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/redactyl/redactyl/internal/config"
-	"github.com/redactyl/redactyl/internal/detectors"
+	"github.com/redactyl/redactyl/internal/engine"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -79,11 +79,11 @@ func runConfigInit(_ *cobra.Command, _ []string) error {
 				"jwt",
 			}, ",")
 		case "maximal":
-			ids := detectors.IDs()
+			ids := engine.DetectorIDs()
 			sort.Strings(ids)
 			enable = strings.Join(ids, ",")
 		default: // standard
-			ids := detectors.IDs()
+			ids := engine.DetectorIDs()
 			sort.Strings(ids)
 			enable = strings.Join(ids, ",")
 		}

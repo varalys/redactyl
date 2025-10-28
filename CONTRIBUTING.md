@@ -45,25 +45,15 @@ Please follow the Code of Conduct in `CODE_OF_CONDUCT.md`.
   - Prefer servers to accept multiple known versions during transitions.
 - Please include/adjust contract tests when changing JSON output.
 
-## Detector guidelines
+## Detection Rules
 
-- Quality:
-  - Keep false positives low. Prefer precise regexes or contextual checks.
-  - Map severity to risk realistically; use `low|medium|high` consistently.
-  - Provide a sensible `confidence` in [0,1]. Aim for >0.9 when highly certain.
-  - Use validator heuristics (prefix/length/alphabet, simple decoders) to raise confidence and filter near-misses. See `internal/validate`.
-- Performance:
-  - Avoid quadratic scans; use compiled regexes and short-circuit early.
-  - Respect size limits and binary detection already enforced by the engine.
-  - Structured context: prefer lightweight JSON/YAML passes (`internal/ctxparse`) when key/value positions matter; guard by file extension and size.
-- IDs and docs:
-  - Add a unique, stable ID in `internal/detectors` and update the README list if user-facing.
-  - Document any non-trivial validator criteria in `docs/rules/README.md` under your rule ID.
-- Tests:
-  - Add positive and negative cases; cover edge cases.
-  - Consider fuzz tests where input surface is large.
-  - When adding validators, include tests that assert both acceptance (true positive) and rejection (near-miss) cases. For end-to-end validator effects, prefer invoking `detectors.RunAll`.
-  - When adding structured scanning, include at least one test where a value is split across lines (YAML `|`) or nested in JSON, and verify `RunAll` catches it.
+Redactyl uses [Gitleaks](https://github.com/gitleaks/gitleaks) for all secret detection. To add or modify detection rules:
+
+- **Add new patterns:** Contribute to the [Gitleaks project](https://github.com/gitleaks/gitleaks) directly
+- **Custom rules:** Create a `.gitleaks.toml` config file in your project root
+- **Testing rules:** Use Gitleaks' built-in testing framework
+
+See the [Gitleaks documentation](https://github.com/gitleaks/gitleaks#configuration) for rule configuration details.
 
 ## Tooling
 
