@@ -75,8 +75,12 @@ func (s *Scanner) ScanWithContext(ctx scanner.ScanContext, data []byte) ([]types
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp file: %w", err)
 	}
-	defer os.Remove(tmpfile.Name())
-	defer tmpfile.Close()
+	defer func() {
+		_ = os.Remove(tmpfile.Name())
+	}()
+	defer func() {
+		_ = tmpfile.Close()
+	}()
 
 	if _, err := tmpfile.Write(data); err != nil {
 		return nil, fmt.Errorf("failed to write temp file: %w", err)
@@ -91,17 +95,19 @@ func (s *Scanner) ScanWithContext(ctx scanner.ScanContext, data []byte) ([]types
 		return nil, fmt.Errorf("failed to create report file: %w", err)
 	}
 	reportPath := reportFile.Name()
-	reportFile.Close()
-	defer os.Remove(reportPath)
+	_ = reportFile.Close()
+	defer func() {
+		_ = os.Remove(reportPath)
+	}()
 
 	// Build gitleaks command
 	args := []string{
 		"detect",
-		"--no-git",          // Don't use git, just scan files
+		"--no-git", // Don't use git, just scan files
 		"--report-format", "json",
 		"--report-path", reportPath,
 		"--source", tmpfile.Name(),
-		"--exit-code", "0",  // Don't exit with error on findings
+		"--exit-code", "0", // Don't exit with error on findings
 	}
 
 	if s.configPath != "" {
@@ -120,9 +126,8 @@ func (s *Scanner) ScanWithContext(ctx scanner.ScanContext, data []byte) ([]types
 			// With --exit-code 0, we shouldn't get exit code 1
 			// If we do, something went wrong
 			return nil, fmt.Errorf("gitleaks failed (exit %d): %s", exitErr.ExitCode(), stderr.String())
-		} else {
-			return nil, fmt.Errorf("gitleaks execution failed: %w: %s", err, stderr.String())
 		}
+		return nil, fmt.Errorf("gitleaks execution failed: %w: %s", err, stderr.String())
 	}
 
 	// Read and parse JSON report
@@ -188,23 +193,23 @@ func (s *Scanner) convertFindings(gf []GitleaksFinding, ctx scanner.ScanContext)
 
 // GitleaksFinding represents Gitleaks JSON output format.
 type GitleaksFinding struct {
-	Description string  `json:"Description"`
-	RuleID      string  `json:"RuleID"`
-	Match       string  `json:"Match"`
-	Secret      string  `json:"Secret"`
-	StartLine   int     `json:"StartLine"`
-	EndLine     int     `json:"EndLine"`
-	StartColumn int     `json:"StartColumn"`
-	EndColumn   int     `json:"EndColumn"`
-	File        string  `json:"File"`
-	Commit      string  `json:"Commit"`
-	Entropy     float64 `json:"Entropy,omitempty"`
-	Author      string  `json:"Author,omitempty"`
-	Email       string  `json:"Email,omitempty"`
-	Date        string  `json:"Date,omitempty"`
-	Message     string  `json:"Message,omitempty"`
+	Description string   `json:"Description"`
+	RuleID      string   `json:"RuleID"`
+	Match       string   `json:"Match"`
+	Secret      string   `json:"Secret"`
+	StartLine   int      `json:"StartLine"`
+	EndLine     int      `json:"EndLine"`
+	StartColumn int      `json:"StartColumn"`
+	EndColumn   int      `json:"EndColumn"`
+	File        string   `json:"File"`
+	Commit      string   `json:"Commit"`
+	Entropy     float64  `json:"Entropy,omitempty"`
+	Author      string   `json:"Author,omitempty"`
+	Email       string   `json:"Email,omitempty"`
+	Date        string   `json:"Date,omitempty"`
+	Message     string   `json:"Message,omitempty"`
 	Tags        []string `json:"Tags,omitempty"`
-	Fingerprint string  `json:"Fingerprint,omitempty"`
+	Fingerprint string   `json:"Fingerprint,omitempty"`
 }
 
 // mapGitleaksToConfidence maps Gitleaks findings to a confidence score.
@@ -220,11 +225,12 @@ func mapGitleaksToConfidence(f GitleaksFinding) float64 {
 	if f.Entropy > 0 {
 		// Higher entropy = lower confidence
 		// Typical entropy range: 3.0-5.0 for real secrets
-		if f.Entropy > 4.5 {
+		switch {
+		case f.Entropy > 4.5:
 			confidence = 0.9
-		} else if f.Entropy > 3.5 {
+		case f.Entropy > 3.5:
 			confidence = 0.75
-		} else {
+		default:
 			confidence = 0.6
 		}
 	}
@@ -281,10 +287,12 @@ func DetectConfigPath(repoRoot string) string {
 // - Medium confidence (0.7-0.9) -> Medium severity
 // - Low confidence (< 0.7) -> Low severity
 func mapConfidenceToSeverity(confidence float64) types.Severity {
-	if confidence >= 0.9 {
+	switch {
+	case confidence >= 0.9:
 		return types.SevHigh
-	} else if confidence >= 0.7 {
+	case confidence >= 0.7:
 		return types.SevMed
+	default:
+		return types.SevLow
 	}
-	return types.SevLow
 }

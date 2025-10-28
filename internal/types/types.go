@@ -14,12 +14,12 @@ const (
 type Finding struct {
 	Path       string            `json:"path"`
 	Line       int               `json:"line"`
-	Column     int               `json:"column,omitempty"`     // Column number (0 if unknown)
+	Column     int               `json:"column,omitempty"` // Column number (0 if unknown)
 	Match      string            `json:"match"`
-	Secret     string            `json:"secret,omitempty"`     // Actual secret value (may be redacted)
+	Secret     string            `json:"secret,omitempty"` // Actual secret value (may be redacted)
 	Detector   string            `json:"detector"`
 	Severity   Severity          `json:"severity"`
 	Confidence float64           `json:"confidence"`
-	Context    string            `json:"context,omitempty"`    // Additional context or description
-	Metadata   map[string]string `json:"metadata,omitempty"`   // Artifact-specific metadata
+	Context    string            `json:"context,omitempty"`  // Additional context or description
+	Metadata   map[string]string `json:"metadata,omitempty"` // Artifact-specific metadata
 }
