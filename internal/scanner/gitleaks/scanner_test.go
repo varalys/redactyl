@@ -79,21 +79,22 @@ func TestScanner_Scan(t *testing.T) {
 	s, err := NewScanner(cfg)
 	require.NoError(t, err)
 
-	// Test with a known AWS key pattern
-	testData := []byte("aws_access_key_id = AKIAIOSFODNN7EXAMPLE")
+	// Test with a pattern that Gitleaks recognizes (generic-api-key with high entropy)
+	testData := []byte("token = ghp_ABCDEFGHIJKLMNOPQRST1234567890ab")
 
 	findings, err := s.Scan("test.txt", testData)
 	require.NoError(t, err)
 
 	// Should detect at least one finding
-	assert.NotEmpty(t, findings, "Expected gitleaks to detect AWS key")
+	assert.NotEmpty(t, findings, "Expected gitleaks to detect token")
 
 	if len(findings) > 0 {
 		f := findings[0]
 		assert.Equal(t, "test.txt", f.Path)
 		assert.NotEmpty(t, f.Detector)
-		assert.Contains(t, f.Match, "AKIA")
+		assert.Contains(t, f.Match, "ghp_")
 		assert.Greater(t, f.Confidence, 0.0)
+		assert.NotEmpty(t, f.Severity)
 	}
 }
 

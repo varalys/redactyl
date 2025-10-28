@@ -85,11 +85,21 @@ func (s *Scanner) ScanWithContext(ctx scanner.ScanContext, data []byte) ([]types
 		return nil, fmt.Errorf("failed to close temp file: %w", err)
 	}
 
+	// Create temp file for report output
+	reportFile, err := os.CreateTemp("", "redactyl-report-*.json")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create report file: %w", err)
+	}
+	reportPath := reportFile.Name()
+	reportFile.Close()
+	defer os.Remove(reportPath)
+
 	// Build gitleaks command
 	args := []string{
 		"detect",
 		"--no-git",          // Don't use git, just scan files
 		"--report-format", "json",
+		"--report-path", reportPath,
 		"--source", tmpfile.Name(),
 		"--exit-code", "0",  // Don't exit with error on findings
 	}
@@ -100,28 +110,30 @@ func (s *Scanner) ScanWithContext(ctx scanner.ScanContext, data []byte) ([]types
 
 	// Execute gitleaks
 	cmd := exec.Command(s.binaryPath, args...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
+	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
 	err = cmd.Run()
 	if err != nil {
 		// Check if this is just a findings error (exit code 1)
 		if exitErr, ok := err.(*exec.ExitError); ok {
-			// Gitleaks returns exit code 1 when findings exist
-			// This is expected, so we continue processing
-			if exitErr.ExitCode() != 1 {
-				return nil, fmt.Errorf("gitleaks failed (exit %d): %s", exitErr.ExitCode(), stderr.String())
-			}
+			// With --exit-code 0, we shouldn't get exit code 1
+			// If we do, something went wrong
+			return nil, fmt.Errorf("gitleaks failed (exit %d): %s", exitErr.ExitCode(), stderr.String())
 		} else {
 			return nil, fmt.Errorf("gitleaks execution failed: %w: %s", err, stderr.String())
 		}
 	}
 
-	// Parse JSON output
+	// Read and parse JSON report
+	reportData, err := os.ReadFile(reportPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read gitleaks report: %w", err)
+	}
+
 	var gitleaksFindings []GitleaksFinding
-	if stdout.Len() > 0 {
-		if err := json.Unmarshal(stdout.Bytes(), &gitleaksFindings); err != nil {
+	if len(reportData) > 0 {
+		if err := json.Unmarshal(reportData, &gitleaksFindings); err != nil {
 			return nil, fmt.Errorf("failed to parse gitleaks JSON output: %w", err)
 		}
 	}
@@ -140,6 +152,7 @@ func (s *Scanner) convertFindings(gf []GitleaksFinding, ctx scanner.ScanContext)
 	var findings []types.Finding
 
 	for _, f := range gf {
+		confidence := mapGitleaksToConfidence(f)
 		finding := types.Finding{
 			Path:       ctx.VirtualPath, // Use virtual path, not temp file path
 			Detector:   f.RuleID,
@@ -148,7 +161,8 @@ func (s *Scanner) convertFindings(gf []GitleaksFinding, ctx scanner.ScanContext)
 			Line:       f.StartLine,
 			Column:     f.StartColumn,
 			Context:    f.Description,
-			Confidence: mapGitleaksToConfidence(f),
+			Confidence: confidence,
+			Severity:   mapConfidenceToSeverity(confidence),
 			Metadata:   make(map[string]string),
 		}
 
@@ -259,4 +273,18 @@ func DetectConfigPath(repoRoot string) string {
 	}
 
 	return ""
+}
+
+// mapConfidenceToSeverity maps a confidence score to a severity level.
+// This follows the Redactyl convention:
+// - High confidence (0.9+) -> High severity
+// - Medium confidence (0.7-0.9) -> Medium severity
+// - Low confidence (< 0.7) -> Low severity
+func mapConfidenceToSeverity(confidence float64) types.Severity {
+	if confidence >= 0.9 {
+		return types.SevHigh
+	} else if confidence >= 0.7 {
+		return types.SevMed
+	}
+	return types.SevLow
 }
