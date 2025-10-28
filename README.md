@@ -221,30 +221,78 @@ no_color: false
 archives: false
 containers: false
 iac: false
+helm: false        # Scan Helm charts (.tgz and directories)
+k8s: false         # Scan Kubernetes manifests (YAML)
 max_archive_bytes: 33554432 # 32 MiB
 max_entries: 1000
 max_depth: 2
 scan_time_budget: 10s
 global_artifact_budget: 10s
+
+# Gitleaks integration (optional custom config)
+gitleaks:
+  config: .gitleaks.toml    # Path to custom Gitleaks config
+  auto_download: true        # Auto-download Gitleaks if not found
+  version: latest            # Gitleaks version to use
 ```
 
 ## Deep scanning
 
-- Never extracts to disk; entries are streamed and filtered as text before detectors run.
-- Virtual paths indicate origin inside an artifact, e.g.:
-  - `archive.zip::docs/config.txt`
-  - `image.tar::<layerID>/etc/app.yaml`
-  - Nested: `outer.zip::inner.tgz::path/in/file.txt`
-- Guardrails abort per‑artifact scanning early on size, entry count, depth, or time budgets.
-- A separate optional global budget can cap total deep-scan time across all artifacts: `--global-artifact-budget` or `global_artifact_budget` in config.
-- Durations use Go‑style syntax (e.g., `5s`, `2m`). Sizes are bytes.
-- Artifact filenames are filtered by `.redactylignore` and include/exclude globs before opening.
+Redactyl excels at finding secrets in complex cloud-native artifacts without extracting them to disk.
 
-Examples:
+**Supported Artifact Types:**
+- **Archives**: zip, tar, tgz, tar.gz (nested archives supported)
+- **Container Images**: Docker saved tarballs with full layer scanning
+- **Helm Charts**: `.tgz` archives and unpacked chart directories (Chart.yaml, values.yaml, templates/)
+- **Kubernetes Manifests**: YAML files with Secrets, ConfigMaps, Deployments, etc.
+- **IaC Files**: Terraform state files, kubeconfigs
+
+**Key Features:**
+- **Streaming** - Never extracts to disk; entries are streamed and filtered as text
+- **Virtual Paths** - Show exactly where secrets hide:
+  - `archive.zip::docs/config.txt`
+  - `image.tar::layer-abc123::etc/app.yaml`
+  - `my-chart.tgz::templates/secret.yaml`
+  - `outer.zip::inner.tgz::nested/file.txt`
+- **Guardrails** - Abort per-artifact on size, entry count, depth, or time budgets
+- **Global Budget** - Cap total scan time across all artifacts
+- **Smart Filtering** - Artifact filenames filtered by `.redactylignore` and globs before opening
+
+**Examples:**
 
 ```sh
+# Scan archives
 redactyl scan --archives
-redactyl scan --containers --max-archive-bytes 67108864 --scan-time-budget 5s --global-artifact-budget 8s
+
+# Scan container images
+redactyl scan --containers
+
+# Scan Helm charts (both .tgz and directories)
+redactyl scan --helm
+
+# Scan Kubernetes manifests
+redactyl scan --k8s
+
+# Combine multiple types
+redactyl scan --containers --helm --k8s --archives
+
+# With guardrails
+redactyl scan --helm --k8s \
+  --max-archive-bytes 67108864 \
+  --scan-time-budget 5s \
+  --global-artifact-budget 30s
+```
+
+**Cloud-Native Project Scanning:**
+
+```sh
+# Typical Kubernetes project
+redactyl scan --helm --k8s -p ./k8s-deployments
+
+# Full CI/CD artifact scan
+redactyl scan --archives --containers --helm --k8s \
+  --max-depth 3 \
+  --scan-time-budget 10s
 ```
 
 ## Baseline

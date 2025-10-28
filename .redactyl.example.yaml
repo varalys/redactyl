@@ -1,0 +1,161 @@
+# Redactyl Configuration Example
+# Place this file as `.redactyl.yaml` in your repo root or `~/.config/redactyl/config.yml` globally
+# CLI flags always override config values
+# Precedence: CLI > local .redactyl.yaml > global config.yml
+
+# =============================================================================
+# Basic Scanning Configuration
+# =============================================================================
+
+# Include/exclude file patterns (glob syntax)
+include: "**/*"  # Scan all files (default)
+exclude: ""      # Additional exclusions beyond default_excludes
+
+# Maximum file size to scan (bytes)
+max_bytes: 1048576  # 1 MB
+
+# Number of scan threads (0 = auto-detect CPU cores)
+threads: 0
+
+# =============================================================================
+# Deep Artifact Scanning
+# =============================================================================
+
+# Enable scanning of different artifact types
+archives: false    # zip, tar, tgz, tar.gz files
+containers: false  # Docker container images (saved tarballs)
+iac: false         # Infrastructure as Code (Terraform state, kubeconfigs)
+helm: true         # Helm charts (.tgz archives and directories)
+k8s: true          # Kubernetes manifests (YAML files)
+
+# Artifact scanning guardrails
+max_archive_bytes: 33554432  # 32 MB - max decompressed size per artifact
+max_entries: 1000             # Max files/entries per archive before aborting
+max_depth: 2                  # Max recursion depth for nested archives
+scan_time_budget: 10s         # Time budget per artifact (Go duration format)
+global_artifact_budget: 0     # Optional global time budget across all artifacts (0 = disabled)
+
+# =============================================================================
+# Gitleaks Integration
+# =============================================================================
+
+gitleaks:
+  # Path to custom .gitleaks.toml configuration
+  # If not specified, Gitleaks uses its default rules
+  config: ""  # e.g., ".gitleaks.toml" or "/path/to/custom-gitleaks.toml"
+
+  # Auto-download Gitleaks binary if not found in PATH
+  auto_download: true
+
+  # Gitleaks version to use (when auto-downloading)
+  # Use "latest" for the most recent version
+  version: "latest"  # e.g., "8.18.0" or "latest"
+
+  # Custom path to Gitleaks binary (optional)
+  # If not specified, Redactyl searches PATH and ~/.redactyl/bin/
+  # binary: "/usr/local/bin/gitleaks"
+
+# =============================================================================
+# Output & Display
+# =============================================================================
+
+# Disable colored output
+no_color: false
+
+# Minimum confidence threshold (0.0-1.0)
+# Findings below this threshold are filtered out
+min_confidence: 0.7
+
+# Use default file exclusions (lockfiles, generated code, binaries)
+default_excludes: true
+
+# =============================================================================
+# Cloud-Native Project Examples
+# =============================================================================
+
+# For a typical Kubernetes project with Helm charts:
+# helm: true
+# k8s: true
+# max_archive_bytes: 52428800  # 50 MB for larger charts
+# scan_time_budget: 15s
+
+# For a full CI/CD artifact scan:
+# archives: true
+# containers: true
+# helm: true
+# k8s: true
+# iac: true
+# max_depth: 3
+# global_artifact_budget: 60s  # 1 minute total budget
+
+# For a microservices repo with many containers:
+# containers: true
+# max_archive_bytes: 104857600  # 100 MB for large images
+# threads: 8
+# global_artifact_budget: 120s  # 2 minutes
+
+# =============================================================================
+# Git History Scanning
+# =============================================================================
+
+# Scan staged changes only
+# staged: false
+
+# Scan last N commits
+# history: 0
+
+# Diff against a base branch
+# base: ""  # e.g., "main" or "origin/main"
+
+# =============================================================================
+# Advanced Options
+# =============================================================================
+
+# Disable validator heuristics (post-detection validation)
+# no_validators: false
+
+# Disable structured JSON/YAML key scanning
+# no_structured: false
+
+# Soft verify mode: off, safe, or custom
+# verify: "off"
+
+# =============================================================================
+# Common Presets
+# =============================================================================
+
+# Preset 1: Local Development (fast, basic scan)
+# helm: false
+# k8s: false
+# archives: false
+# threads: 4
+# max_bytes: 524288  # 512 KB
+
+# Preset 2: CI/CD Pipeline (comprehensive, with guardrails)
+# helm: true
+# k8s: true
+# archives: true
+# containers: true
+# global_artifact_budget: 300s  # 5 minutes
+# threads: 8
+
+# Preset 3: Security Audit (thorough, no time limits)
+# helm: true
+# k8s: true
+# archives: true
+# containers: true
+# iac: true
+# max_depth: 5
+# max_archive_bytes: 524288000  # 500 MB
+# global_artifact_budget: 0  # No time limit
+
+# =============================================================================
+# Notes
+# =============================================================================
+#
+# - Durations use Go format: "5s", "10m", "1h30m"
+# - Sizes are in bytes (use MB/GB conversion: 1 MB = 1048576 bytes)
+# - Virtual paths show artifact origins: "chart.tgz::templates/secret.yaml"
+# - Use .redactylignore file for gitignore-style path exclusions
+# - See docs/deep-scanning.md for more details on artifact scanning
+#
