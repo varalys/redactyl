@@ -1,8 +1,8 @@
 # Redactyl - Project Context for Claude
 
-**Last Updated:** 2025-10-28
-**Status:** Q1 2025 Milestones Complete + Legacy Code Cleanup - Production Ready
-**Branch:** `pivot-buildout` (7 commits ahead of main)
+**Last Updated:** 2025-10-30
+**Status:** Q1 2025 Milestones Complete - Production Ready
+**Branch:** `main` (pivot merged)
 
 ## Executive Summary
 
@@ -68,11 +68,12 @@ type ScanContext struct {
 **Implementation:** Currently only Gitleaks scanner exists. The interface allows future scanners but Gitleaks is sufficient.
 
 #### 2. Gitleaks Integration (`internal/scanner/gitleaks/`)
-- **Binary Manager:** Auto-detect in PATH, version checking, auto-download
+- **Binary Manager:** Auto-detect in PATH, version checking, auto-download from GitHub releases
 - **Scanner Implementation:** Temp file handling, report-path JSON parsing
 - **Finding Conversion:** Maps Gitleaks JSON → Redactyl types.Finding
 - **Virtual Path Remapping:** Preserves artifact context through scanning
 - **Metadata Enrichment:** Adds gitleaks_rule_id to finding metadata
+- **Auto-download:** Implemented - downloads from GitHub releases to ~/.redactyl/bin
 
 #### 3. Artifact Scanning (`internal/artifacts/`)
 
@@ -235,29 +236,23 @@ redactyl scan --archives --containers --helm --k8s \
 
 ## Next Session TODO List
 
-### Immediate Tasks (Next Session)
-1. **Merge `pivot-buildout` to `main`**
-   - Review all 7 commits
-   - Squash if needed or keep detailed history
-   - Update main branch with Q1 completion
+### Immediate Tasks (Current Session - 2025-10-30)
+1. ✅ **Merge `pivot-buildout` to `main`** - DONE
+2. ✅ **Implement Gitleaks auto-download** - DONE
+3. **Pre-Release Polish**
+   - Add performance benchmarks for artifact scanning
+   - Test with large Helm charts (100+ templates)
+   - Test with large container images (10GB+)
+   - Improve error messages for Gitleaks failures
+   - Add more OCI format edge case tests
+   - Create `docs/gitleaks-integration.md` (how it works)
+   - Update CONTRIBUTING.md with current architecture
 
-2. **Prepare Release v1.0**
+4. **Prepare Release v1.0** (After polish)
    - Update CHANGELOG.md with all Q1 features
    - Bump version from 0.1.0 to 1.0.0
    - Create release notes
    - Tag release: `git tag v1.0.0`
-
-3. **Post-Launch Documentation**
-   - Create `docs/gitleaks-integration.md` (how it works)
-   - Create migration guide (for anyone using detectors)
-   - Update CONTRIBUTING.md
-   - Create detector ID mapping table (old → Gitleaks rules)
-
-4. **Performance & Benchmarking**
-   - Add benchmarks for artifact scanning
-   - Test with large Helm charts (100+ templates)
-   - Test with large container images (10GB+)
-   - Document performance characteristics
 
 ### Short-Term (Next 1-2 Weeks)
 5. **Community & Marketing**
@@ -272,11 +267,10 @@ redactyl scan --archives --containers --helm --k8s \
    - Prototype: Stream layers without pulling
    - Research: GitHub Actions marketplace listing
 
-7. **Technical Debt**
-   - Implement Gitleaks auto-download (currently placeholder)
-   - Add more OCI format tests (edge cases)
-   - Improve error messages for Gitleaks failures
+7. **Technical Debt & Enhancements**
    - Add telemetry opt-in (usage stats)
+   - Improve progress indicators for long scans
+   - Add retry logic for transient failures
 
 ### Medium-Term (Next 1-2 Months)
 8. **Start Q2 Milestone 2.1: Registry Integration**
@@ -309,7 +303,6 @@ redactyl scan --archives --containers --helm --k8s \
 ✅ Documentation complete
 
 ### What's Incomplete
-⚠️ Gitleaks auto-download (placeholder exists, needs implementation)
 ⚠️ Registry integration (Q2 feature)
 ⚠️ Web dashboard (Q3 feature)
 ⚠️ Policy engine (Q3 feature)
@@ -372,17 +365,17 @@ make test                              # All unit tests
 
 ## Git Repository Status
 
-**Branch:** `pivot-buildout` (7 commits)
-**Status:** Ready to merge to main
+**Branch:** `main`
+**Status:** Pivot merged, implementing final polish items
 
+Recent commits:
 ```
-a130703 - docs: update README and ROADMAP with Phase 2 completion
-d8c2993 - feat(engine,cli): integrate Helm and Kubernetes scanning
-622ca9e - feat(artifacts): add OCI, Helm, and Kubernetes scanning support
-39a893d - fix(scanner): use report-path and add severity mapping
-7329513 - feat(engine): integrate Gitleaks scanner into engine
-b10b289 - feat(scanner): add Gitleaks integration foundation
-a152f5c - setup pivot for artifact scanning
+7c491d4 - docs: clarify detector filtering and remove obsolete gendocs
+30d5955 - docs: streamline README to reduce redundancy
+c137b68 - docs: remove decorative emojis from documentation
+416f065 - docs: remove emojis from README for cleaner presentation
+1839b07 - fix(test): reduce perf test expectation and improve secret entropy
+0985650 - Merge pull request #13 from redactyl/pivot-buildout (PIVOT MERGED)
 ```
 
 **Stats:**
@@ -423,10 +416,10 @@ When working on this project:
 4. **Run tests** - Ensure everything still works: `go test ./...`
 
 ### When Resuming Work
-- Current branch: `pivot-buildout`
-- Next milestone: Merge to main + Release v1.0
-- Focus area: Q2 planning (registry integration)
-- Status: Q1 complete, ready for launch
+- Current branch: `main`
+- Next milestone: Pre-release polish + Release v1.0
+- Focus area: Documentation, testing, polish
+- Status: Q1 complete + pivot merged, preparing for v1.0 release
 
 ### When Suggesting Features
 **Ask yourself:**
@@ -463,4 +456,4 @@ When working on this project:
 ---
 
 *This document is living context. Update it after every major milestone.*
-*Last major update: 2025-10-28 (Q1 completion)*
+*Last major update: 2025-10-30 (Gitleaks auto-download implemented, preparing for v1.0)*

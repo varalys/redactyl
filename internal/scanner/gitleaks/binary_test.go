@@ -130,11 +130,61 @@ func TestGetPlatform(t *testing.T) {
 	}
 }
 
-func TestBinaryManager_Download_NotImplemented(t *testing.T) {
-	bm := NewBinaryManager("")
-	err := bm.Download("8.18.0")
+func TestBinaryManager_Download(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping download test in short mode")
+	}
 
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "auto-download not yet implemented")
-	assert.Contains(t, err.Error(), "brew install gitleaks") // Should have installation instructions
+	// Use a temp directory for cache to avoid polluting user's cache
+	tmpDir := t.TempDir()
+	bm := &BinaryManager{
+		cachePath: tmpDir,
+	}
+
+	// Test downloading a specific version
+	err := bm.Download("8.18.0")
+	require.NoError(t, err)
+
+	// Verify binary was downloaded
+	binaryName := "gitleaks"
+	if runtime.GOOS == "windows" {
+		binaryName += ".exe"
+	}
+	binaryPath := filepath.Join(tmpDir, binaryName)
+	assert.FileExists(t, binaryPath)
+
+	// Verify it's executable (on Unix)
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat(binaryPath)
+		require.NoError(t, err)
+		assert.True(t, info.Mode()&0111 != 0, "binary should be executable")
+	}
+
+	// Verify we can get version from downloaded binary
+	version, err := bm.Version(binaryPath)
+	require.NoError(t, err)
+	assert.Contains(t, version, "8.18")
+}
+
+func TestBinaryManager_Download_Latest(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping download test in short mode")
+	}
+
+	tmpDir := t.TempDir()
+	bm := &BinaryManager{
+		cachePath: tmpDir,
+	}
+
+	// Test downloading latest version
+	err := bm.Download("latest")
+	require.NoError(t, err)
+
+	// Verify binary exists
+	binaryName := "gitleaks"
+	if runtime.GOOS == "windows" {
+		binaryName += ".exe"
+	}
+	binaryPath := filepath.Join(tmpDir, binaryName)
+	assert.FileExists(t, binaryPath)
 }
