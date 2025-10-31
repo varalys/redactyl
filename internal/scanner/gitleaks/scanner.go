@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/redactyl/redactyl/internal/config"
 	"github.com/redactyl/redactyl/internal/scanner"
@@ -34,15 +35,37 @@ func NewScanner(cfg config.GitleaksConfig) (*Scanner, error) {
 				version = "latest"
 			}
 			if dlErr := bm.Download(version); dlErr != nil {
-				return nil, fmt.Errorf("gitleaks binary not found and auto-download failed: %w", dlErr)
+				return nil, fmt.Errorf("gitleaks binary not found and auto-download failed: %w\n\n"+
+					"To fix this:\n"+
+					"  1. Install Gitleaks manually:\n"+
+					"     macOS:   brew install gitleaks\n"+
+					"     Linux:   Download from https://github.com/gitleaks/gitleaks/releases\n"+
+					"     Windows: Download from https://github.com/gitleaks/gitleaks/releases\n"+
+					"  2. Or specify explicit path in config:\n"+
+					"     gitleaks:\n"+
+					"       binary: /path/to/gitleaks\n"+
+					"  3. Or check network connectivity for auto-download", dlErr)
 			}
 			// Try finding again after download
 			binaryPath, err = bm.Find()
 			if err != nil {
-				return nil, fmt.Errorf("gitleaks binary not found after download: %w", err)
+				return nil, fmt.Errorf("gitleaks binary not found after successful download: %w\n"+
+					"This is unexpected. Please report this issue at:\n"+
+					"https://github.com/redactyl/redactyl/issues", err)
 			}
 		} else {
-			return nil, fmt.Errorf("gitleaks binary not found (auto-download disabled): %w", err)
+			return nil, fmt.Errorf("gitleaks binary not found (auto-download disabled): %w\n\n"+
+				"To fix this:\n"+
+				"  1. Install Gitleaks:\n"+
+				"     macOS:   brew install gitleaks\n"+
+				"     Linux:   Download from https://github.com/gitleaks/gitleaks/releases\n"+
+				"     Windows: Download from https://github.com/gitleaks/gitleaks/releases\n"+
+				"  2. Or enable auto-download in config:\n"+
+				"     gitleaks:\n"+
+				"       auto_download: true\n"+
+				"  3. Or specify explicit path:\n"+
+				"     gitleaks:\n"+
+				"       binary: /path/to/gitleaks", err)
 		}
 	}
 
@@ -121,13 +144,35 @@ func (s *Scanner) ScanWithContext(ctx scanner.ScanContext, data []byte) ([]types
 
 	err = cmd.Run()
 	if err != nil {
+		stderrStr := stderr.String()
+
 		// Check if this is just a findings error (exit code 1)
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			// With --exit-code 0, we shouldn't get exit code 1
 			// If we do, something went wrong
-			return nil, fmt.Errorf("gitleaks failed (exit %d): %s", exitErr.ExitCode(), stderr.String())
+			exitCode := exitErr.ExitCode()
+
+			// Provide helpful error messages based on common failure modes
+			errorMsg := fmt.Sprintf("gitleaks failed (exit code %d)", exitCode)
+
+			// Check for common error patterns
+			if contains(stderrStr, "config") || contains(stderrStr, ".toml") {
+				errorMsg += "\n\nConfig file error detected. Check your .gitleaks.toml file:\n" +
+					"  - Verify TOML syntax is valid\n" +
+					"  - Check that all regex patterns are properly escaped\n" +
+					"  - See https://github.com/gitleaks/gitleaks#configuration for examples"
+			} else if contains(stderrStr, "permission denied") {
+				errorMsg += "\n\nPermission denied. Check:\n" +
+					"  - Gitleaks binary has execute permissions\n" +
+					"  - You have read access to the files being scanned"
+			} else if contains(stderrStr, "invalid") || contains(stderrStr, "syntax") {
+				errorMsg += "\n\nInvalid configuration or syntax error."
+			}
+
+			errorMsg += fmt.Sprintf("\n\nGitleaks error output:\n%s", stderrStr)
+			return nil, fmt.Errorf("%s", errorMsg)
 		}
-		return nil, fmt.Errorf("gitleaks execution failed: %w: %s", err, stderr.String())
+		return nil, fmt.Errorf("gitleaks execution failed: %w\n\nError output:\n%s", err, stderrStr)
 	}
 
 	// Read and parse JSON report
@@ -139,7 +184,13 @@ func (s *Scanner) ScanWithContext(ctx scanner.ScanContext, data []byte) ([]types
 	var gitleaksFindings []GitleaksFinding
 	if len(reportData) > 0 {
 		if err := json.Unmarshal(reportData, &gitleaksFindings); err != nil {
-			return nil, fmt.Errorf("failed to parse gitleaks JSON output: %w", err)
+			return nil, fmt.Errorf("failed to parse gitleaks JSON output: %w\n\n"+
+				"This usually indicates a version compatibility issue.\n"+
+				"Current Gitleaks version: %s\n"+
+				"Recommended: 8.18.0 or later\n\n"+
+				"To update Gitleaks:\n"+
+				"  macOS:   brew upgrade gitleaks\n"+
+				"  Other:   Set gitleaks.version in config or download from releases", err, s.version)
 		}
 	}
 
@@ -295,4 +346,9 @@ func mapConfidenceToSeverity(confidence float64) types.Severity {
 	default:
 		return types.SevLow
 	}
+}
+
+// contains is a simple helper to check if a string contains a substring (case-insensitive).
+func contains(s, substr string) bool {
+	return bytes.Contains([]byte(strings.ToLower(s)), []byte(strings.ToLower(substr)))
 }

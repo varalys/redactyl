@@ -13,7 +13,27 @@ Thank you for your interest in contributing!
 - Build: `make build` (outputs `bin/redactyl`).
 - Run: `./bin/redactyl --help`.
 - Generate config: `./bin/redactyl config init`.
- - E2E CLI tests: see `cmd/redactyl/e2e_cli_test.go` for examples of validating JSON/SARIF shapes.
+- E2E CLI tests: see `cmd/redactyl/e2e_cli_test.go` for examples of validating JSON/SARIF shapes.
+
+### Architecture Overview
+
+Redactyl is a **deep artifact scanner** that combines intelligent artifact parsing with Gitleaks-powered secret detection:
+
+**Key Components:**
+- `internal/artifacts/` - Artifact parsing (OCI images, Helm charts, K8s manifests, archives)
+- `internal/scanner/` - Scanner abstraction and Gitleaks integration
+- `internal/engine/` - Scan orchestration and result aggregation
+- `internal/config/` - Configuration management (CLI + file-based)
+- `pkg/core/` - Public API surface for external integrations
+
+**How It Works:**
+1. Parse complex artifacts (containers, Helm, K8s, nested archives)
+2. Stream file contents without disk extraction
+3. Track virtual paths through nested structures (e.g., `chart.tgz::templates/secret.yaml`)
+4. Scan content with Gitleaks detection engine
+5. Enrich findings with artifact metadata and context
+
+See `docs/gitleaks-integration.md` for detailed integration architecture.
 
 ## Code of Conduct
 
@@ -47,13 +67,49 @@ Please follow the Code of Conduct in `CODE_OF_CONDUCT.md`.
 
 ## Detection Rules
 
-Redactyl uses [Gitleaks](https://github.com/gitleaks/gitleaks) for all secret detection. To add or modify detection rules:
+Redactyl uses [Gitleaks](https://github.com/gitleaks/gitleaks) exclusively for all secret detection. We focus on **artifact intelligence** while Gitleaks handles **pattern matching**.
 
-- **Add new patterns:** Contribute to the [Gitleaks project](https://github.com/gitleaks/gitleaks) directly
-- **Custom rules:** Create a `.gitleaks.toml` config file in your project root
-- **Testing rules:** Use Gitleaks' built-in testing framework
+### Adding New Detection Patterns
 
-See the [Gitleaks documentation](https://github.com/gitleaks/gitleaks#configuration) for rule configuration details.
+**Option 1: Contribute to Gitleaks (Recommended)**
+- Benefits everyone in the ecosystem
+- Maintained by Gitleaks team
+- Automatically available in Redactyl
+- Submit PR: https://github.com/gitleaks/gitleaks
+
+**Option 2: Custom Local Rules**
+Create a `.gitleaks.toml` config file:
+
+```toml
+[extend]
+useDefault = true
+
+[[rules]]
+id = "custom-api-key"
+description = "Custom API Key Pattern"
+regex = '''custom_key_[a-zA-Z0-9]{32}'''
+entropy = 4.0
+```
+
+Test with: `redactyl scan --gitleaks-config .gitleaks.toml`
+
+### Working on Scanner Integration
+
+If you're improving the Gitleaks integration itself:
+
+1. **Read the architecture docs:** `docs/gitleaks-integration.md`
+2. **Key files:**
+   - `internal/scanner/scanner.go` - Scanner interface
+   - `internal/scanner/gitleaks/scanner.go` - Gitleaks implementation
+   - `internal/scanner/gitleaks/binary.go` - Binary management
+3. **Test thoroughly:**
+   - Unit tests: `go test ./internal/scanner/gitleaks/...`
+   - Integration tests: `./test/integration/run-tests.sh baseline`
+4. **Consider:**
+   - Virtual path preservation
+   - Temp file cleanup
+   - Error handling and messages
+   - Cross-platform compatibility (Windows, macOS, Linux)
 
 ## Tooling
 
@@ -66,9 +122,34 @@ See the [Gitleaks documentation](https://github.com/gitleaks/gitleaks#configurat
 
 ## Testing and benchmarks
 
+### Unit Tests
 - Run all tests: `go test ./...`
-- Benchmarks (optional): `go test -bench=. -benchmem ./...`
-- If you add performance-sensitive code (e.g., detectors), consider including a basic benchmark.
+- Run specific package: `go test ./internal/artifacts/...`
+- With race detector: `go test ./... -race`
+- Coverage: `go test ./... -coverprofile=coverage.out`
+
+### Integration Tests
+Redactyl has end-to-end integration tests that validate real artifact scanning with Gitleaks:
+
+```bash
+# Run all integration tests
+./test/integration/run-tests.sh
+
+# Run specific test category
+./test/integration/run-tests.sh baseline
+./test/integration/run-tests.sh helm
+./test/integration/run-tests.sh k8s
+
+# Skip download (if Gitleaks already available)
+SKIP_DOWNLOAD=1 ./test/integration/run-tests.sh
+```
+
+See `test/integration/TESTING_GUIDE.md` for detailed information.
+
+### Benchmarks
+- Run benchmarks: `go test -bench=. -benchmem ./...`
+- Specific package: `go test -bench=. ./internal/artifacts/`
+- If you add performance-sensitive code (artifact parsing, scanning), include benchmarks
 
 ## Process and governance
 
