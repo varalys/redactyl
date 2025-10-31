@@ -262,3 +262,303 @@ func TestDetectManifestFormat(t *testing.T) {
 		})
 	}
 }
+
+// Edge case tests
+
+func TestParseOCIManifest_EmptyLayers(t *testing.T) {
+	manifest := OCIManifest{
+		SchemaVersion: 2,
+		MediaType:     "application/vnd.oci.image.manifest.v1+json",
+		Config: OCIDescriptor{
+			MediaType: "application/vnd.oci.image.config.v1+json",
+			Digest:    "sha256:abc123",
+			Size:      1234,
+		},
+		Layers: []OCIDescriptor{}, // Empty layers
+	}
+
+	tmpDir := t.TempDir()
+	manifestPath := filepath.Join(tmpDir, "manifest.json")
+
+	data, err := json.Marshal(manifest)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(manifestPath, data, 0644))
+
+	parsed, err := ParseOCIManifest(manifestPath)
+	require.NoError(t, err)
+	assert.Len(t, parsed.Layers, 0, "should handle empty layers")
+}
+
+func TestParseOCIManifest_LargeLayerCount(t *testing.T) {
+	// Test with 1000 layers (stress test)
+	layers := make([]OCIDescriptor, 1000)
+	for i := 0; i < 1000; i++ {
+		layers[i] = OCIDescriptor{
+			MediaType: "application/vnd.oci.image.layer.v1.tar+gzip",
+			Digest:    "sha256:layer" + string(rune(i)),
+			Size:      int64(1024 * (i + 1)),
+		}
+	}
+
+	manifest := OCIManifest{
+		SchemaVersion: 2,
+		MediaType:     "application/vnd.oci.image.manifest.v1+json",
+		Config: OCIDescriptor{
+			MediaType: "application/vnd.oci.image.config.v1+json",
+			Digest:    "sha256:config",
+			Size:      5000,
+		},
+		Layers: layers,
+	}
+
+	tmpDir := t.TempDir()
+	manifestPath := filepath.Join(tmpDir, "manifest.json")
+
+	data, err := json.Marshal(manifest)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(manifestPath, data, 0644))
+
+	parsed, err := ParseOCIManifest(manifestPath)
+	require.NoError(t, err)
+	assert.Len(t, parsed.Layers, 1000, "should handle large layer count")
+}
+
+func TestParseOCIIndex_MultiArchImage(t *testing.T) {
+	// Test multi-architecture image index (using annotations to distinguish architectures)
+	index := OCIIndex{
+		SchemaVersion: 2,
+		MediaType:     "application/vnd.oci.image.index.v1+json",
+		Manifests: []OCIDescriptor{
+			{
+				MediaType: "application/vnd.oci.image.manifest.v1+json",
+				Digest:    "sha256:amd64manifest",
+				Size:      1234,
+				Annotations: map[string]string{
+					"org.opencontainers.image.ref.name":  "v1.0-amd64",
+					"vnd.docker.reference.type":          "amd64",
+					"io.containerd.image.name":           "example/app:v1.0-amd64",
+				},
+			},
+			{
+				MediaType: "application/vnd.oci.image.manifest.v1+json",
+				Digest:    "sha256:arm64manifest",
+				Size:      5678,
+				Annotations: map[string]string{
+					"org.opencontainers.image.ref.name":  "v1.0-arm64",
+					"vnd.docker.reference.type":          "arm64",
+					"io.containerd.image.name":           "example/app:v1.0-arm64",
+				},
+			},
+			{
+				MediaType: "application/vnd.oci.image.manifest.v1+json",
+				Digest:    "sha256:armv7manifest",
+				Size:      4567,
+				Annotations: map[string]string{
+					"org.opencontainers.image.ref.name": "v1.0-armv7",
+					"vnd.docker.reference.type":         "arm/v7",
+				},
+			},
+			{
+				MediaType: "application/vnd.oci.image.manifest.v1+json",
+				Digest:    "sha256:windowsmanifest",
+				Size:      9012,
+				Annotations: map[string]string{
+					"org.opencontainers.image.ref.name": "v1.0-windows",
+					"os.version":                        "10.0.17763.1234",
+				},
+			},
+		},
+	}
+
+	tmpDir := t.TempDir()
+	indexPath := filepath.Join(tmpDir, "index.json")
+
+	data, err := json.Marshal(index)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(indexPath, data, 0644))
+
+	parsed, err := ParseOCIIndex(indexPath)
+	require.NoError(t, err)
+	assert.Len(t, parsed.Manifests, 4, "should handle multi-arch images")
+
+	// Verify annotations preserve platform information
+	assert.Equal(t, "v1.0-amd64", parsed.Manifests[0].Annotations["org.opencontainers.image.ref.name"])
+	assert.Equal(t, "v1.0-arm64", parsed.Manifests[1].Annotations["org.opencontainers.image.ref.name"])
+	assert.Equal(t, "arm/v7", parsed.Manifests[2].Annotations["vnd.docker.reference.type"])
+	assert.Equal(t, "10.0.17763.1234", parsed.Manifests[3].Annotations["os.version"])
+}
+
+func TestParseOCIConfig_MinimalHistory(t *testing.T) {
+	// Test config with minimal history (some layers have no history entry)
+	config := OCIConfig{
+		Architecture: "amd64",
+		OS:           "linux",
+		RootFS: OCIRootFS{
+			Type:    "layers",
+			DiffIDs: []string{"sha256:layer1", "sha256:layer2", "sha256:layer3"},
+		},
+		History: []OCIHistory{
+			{
+				CreatedBy: "FROM scratch",
+			},
+			// Missing history for layer2
+			// Missing history for layer3
+		},
+	}
+
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.json")
+
+	data, err := json.Marshal(config)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(configPath, data, 0644))
+
+	parsed, err := ParseOCIConfig(configPath)
+	require.NoError(t, err)
+	assert.Len(t, parsed.RootFS.DiffIDs, 3, "should have 3 layers")
+	assert.Len(t, parsed.History, 1, "should have minimal history")
+}
+
+func TestParseOCIConfig_EmptyCommandHistory(t *testing.T) {
+	// Test history entries with empty CreatedBy
+	config := OCIConfig{
+		Architecture: "arm64",
+		OS:           "linux",
+		RootFS: OCIRootFS{
+			Type:    "layers",
+			DiffIDs: []string{"sha256:base"},
+		},
+		History: []OCIHistory{
+			{
+				CreatedBy: "", // Empty command
+				EmptyLayer: true,
+			},
+			{
+				CreatedBy: "ADD file:abc123 in /",
+			},
+		},
+	}
+
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.json")
+
+	data, err := json.Marshal(config)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(configPath, data, 0644))
+
+	parsed, err := ParseOCIConfig(configPath)
+	require.NoError(t, err)
+	assert.True(t, parsed.History[0].EmptyLayer)
+	assert.Empty(t, parsed.History[0].CreatedBy)
+}
+
+func TestBuildLayerContext_FirstLayer(t *testing.T) {
+	// Test context for first layer (no parent)
+	config := &OCIConfig{
+		Architecture: "amd64",
+		OS:           "linux",
+		RootFS: OCIRootFS{
+			Type:    "layers",
+			DiffIDs: []string{"sha256:layer0"},
+		},
+		History: []OCIHistory{
+			{
+				CreatedBy: "FROM alpine:latest",
+			},
+		},
+	}
+
+	ctx := BuildLayerContext(config, 0, "sha256:layer0", 12345)
+
+	assert.Equal(t, "sha256:layer0", ctx.Digest)
+	assert.Equal(t, 0, ctx.Index)
+	assert.Equal(t, 1, ctx.TotalLayers)
+	assert.Empty(t, ctx.ParentDigest, "first layer has no parent")
+}
+
+func TestBuildLayerContext_LastLayer(t *testing.T) {
+	// Test context for last layer
+	config := &OCIConfig{
+		Architecture: "amd64",
+		OS:           "linux",
+		RootFS: OCIRootFS{
+			Type:    "layers",
+			DiffIDs: []string{"sha256:layer0", "sha256:layer1", "sha256:layer2"},
+		},
+		History: []OCIHistory{
+			{CreatedBy: "FROM base"},
+			{CreatedBy: "RUN apt-get update"},
+			{CreatedBy: "CMD [\"/app\"]"},
+		},
+	}
+
+	ctx := BuildLayerContext(config, 2, "sha256:layer2", 999)
+
+	assert.Equal(t, 2, ctx.Index)
+	assert.Equal(t, 3, ctx.TotalLayers)
+	assert.Equal(t, "sha256:layer1", ctx.ParentDigest)
+	assert.Equal(t, "CMD [\"/app\"]", ctx.CreatedBy)
+}
+
+func TestParseOCIManifest_WithAnnotations(t *testing.T) {
+	// Test manifest with rich annotations
+	manifest := OCIManifest{
+		SchemaVersion: 2,
+		MediaType:     "application/vnd.oci.image.manifest.v1+json",
+		Config: OCIDescriptor{
+			MediaType: "application/vnd.oci.image.config.v1+json",
+			Digest:    "sha256:config",
+			Size:      1234,
+		},
+		Layers: []OCIDescriptor{
+			{
+				MediaType: "application/vnd.oci.image.layer.v1.tar+gzip",
+				Digest:    "sha256:layer",
+				Size:      5678,
+			},
+		},
+		Annotations: map[string]string{
+			"org.opencontainers.image.created":     "2023-01-15T10:30:00Z",
+			"org.opencontainers.image.authors":     "Engineering Team",
+			"org.opencontainers.image.url":         "https://example.com",
+			"org.opencontainers.image.source":      "https://github.com/example/repo",
+			"org.opencontainers.image.version":     "v1.2.3",
+			"org.opencontainers.image.revision":    "abc123def456",
+			"org.opencontainers.image.vendor":      "Example Corp",
+			"org.opencontainers.image.licenses":    "MIT",
+			"org.opencontainers.image.title":       "Example Application",
+			"org.opencontainers.image.description": "A containerized application",
+		},
+	}
+
+	tmpDir := t.TempDir()
+	manifestPath := filepath.Join(tmpDir, "manifest.json")
+
+	data, err := json.Marshal(manifest)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(manifestPath, data, 0644))
+
+	parsed, err := ParseOCIManifest(manifestPath)
+	require.NoError(t, err)
+	assert.Len(t, parsed.Annotations, 10)
+	assert.Equal(t, "v1.2.3", parsed.Annotations["org.opencontainers.image.version"])
+	assert.Equal(t, "MIT", parsed.Annotations["org.opencontainers.image.licenses"])
+}
+
+func TestParseOCIManifest_InvalidJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+	manifestPath := filepath.Join(tmpDir, "manifest.json")
+
+	// Write invalid JSON
+	require.NoError(t, os.WriteFile(manifestPath, []byte("{invalid json"), 0644))
+
+	_, err := ParseOCIManifest(manifestPath)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse")
+}
+
+func TestParseOCIManifest_MissingFile(t *testing.T) {
+	_, err := ParseOCIManifest("/nonexistent/manifest.json")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to read")
+}
