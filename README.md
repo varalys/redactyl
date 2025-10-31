@@ -25,6 +25,7 @@ Secrets don't just live in Git history - they hide in **container images, Helm c
 
 - [Installation](#installation)
 - [Quick start](#quick-start)
+- [Performance](#performance)
 - [Configuration](#configuration)
 - [Deep scanning](#deep-scanning)
 - [How detection works](#how-detection-works)
@@ -121,6 +122,21 @@ Performance tuning:
 ```sh
 redactyl scan --threads 4 --max-bytes 2097152
 ```
+
+## Performance
+
+Redactyl is designed for speed. Typical scan times:
+
+- **Helm chart (50 templates):** ~2-5ms
+- **Container image (100MB):** ~100-200ms
+- **Nested archives:** ~10-20ms overhead per level
+- **CI/CD full scan:** ~1-2 seconds for typical projects
+
+**Throughput:** 100-500 MB/s for archives, 8-10 MB/s for YAML parsing
+
+Fast enough for pre-commit hooks and CI/CD pipelines.
+
+See [detailed benchmarks](internal/artifacts/BENCHMARKS.md) for complete performance analysis.
 
 ## Configuration
 
