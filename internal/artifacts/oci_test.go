@@ -334,9 +334,9 @@ func TestParseOCIIndex_MultiArchImage(t *testing.T) {
 				Digest:    "sha256:amd64manifest",
 				Size:      1234,
 				Annotations: map[string]string{
-					"org.opencontainers.image.ref.name":  "v1.0-amd64",
-					"vnd.docker.reference.type":          "amd64",
-					"io.containerd.image.name":           "example/app:v1.0-amd64",
+					"org.opencontainers.image.ref.name": "v1.0-amd64",
+					"vnd.docker.reference.type":         "amd64",
+					"io.containerd.image.name":          "example/app:v1.0-amd64",
 				},
 			},
 			{
@@ -344,9 +344,9 @@ func TestParseOCIIndex_MultiArchImage(t *testing.T) {
 				Digest:    "sha256:arm64manifest",
 				Size:      5678,
 				Annotations: map[string]string{
-					"org.opencontainers.image.ref.name":  "v1.0-arm64",
-					"vnd.docker.reference.type":          "arm64",
-					"io.containerd.image.name":           "example/app:v1.0-arm64",
+					"org.opencontainers.image.ref.name": "v1.0-arm64",
+					"vnd.docker.reference.type":         "arm64",
+					"io.containerd.image.name":          "example/app:v1.0-arm64",
 				},
 			},
 			{
@@ -430,7 +430,7 @@ func TestParseOCIConfig_EmptyCommandHistory(t *testing.T) {
 		},
 		History: []OCIHistory{
 			{
-				CreatedBy: "", // Empty command
+				CreatedBy:  "", // Empty command
 				EmptyLayer: true,
 			},
 			{

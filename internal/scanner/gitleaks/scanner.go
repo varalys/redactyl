@@ -156,16 +156,17 @@ func (s *Scanner) ScanWithContext(ctx scanner.ScanContext, data []byte) ([]types
 			errorMsg := fmt.Sprintf("gitleaks failed (exit code %d)", exitCode)
 
 			// Check for common error patterns
-			if contains(stderrStr, "config") || contains(stderrStr, ".toml") {
+			switch {
+			case contains(stderrStr, "config"), contains(stderrStr, ".toml"):
 				errorMsg += "\n\nConfig file error detected. Check your .gitleaks.toml file:\n" +
 					"  - Verify TOML syntax is valid\n" +
 					"  - Check that all regex patterns are properly escaped\n" +
 					"  - See https://github.com/gitleaks/gitleaks#configuration for examples"
-			} else if contains(stderrStr, "permission denied") {
+			case contains(stderrStr, "permission denied"):
 				errorMsg += "\n\nPermission denied. Check:\n" +
 					"  - Gitleaks binary has execute permissions\n" +
 					"  - You have read access to the files being scanned"
-			} else if contains(stderrStr, "invalid") || contains(stderrStr, "syntax") {
+			case contains(stderrStr, "invalid"), contains(stderrStr, "syntax"):
 				errorMsg += "\n\nInvalid configuration or syntax error."
 			}
 

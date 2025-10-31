@@ -222,7 +222,7 @@ func extractFromTarGz(r io.Reader, filename, destPath string) error {
 	if err != nil {
 		return err
 	}
-	defer gzr.Close()
+	defer gzr.Close() //nolint:errcheck // Best effort cleanup on function exit
 
 	tr := tar.NewReader(gzr)
 	for {
@@ -240,7 +240,7 @@ func extractFromTarGz(r io.Reader, filename, destPath string) error {
 			if err != nil {
 				return err
 			}
-			defer outFile.Close()
+			defer outFile.Close() //nolint:errcheck // Best effort cleanup on function exit
 
 			if _, err := io.Copy(outFile, tr); err != nil {
 				return err
@@ -272,13 +272,13 @@ func extractFromZip(r io.Reader, filename, destPath string) error {
 			if err != nil {
 				return err
 			}
-			defer rc.Close()
+			defer rc.Close() //nolint:errcheck // Best effort cleanup on function exit
 
 			outFile, err := os.Create(destPath)
 			if err != nil {
 				return err
 			}
-			defer outFile.Close()
+			defer outFile.Close() //nolint:errcheck // Best effort cleanup on function exit
 
 			if _, err := io.Copy(outFile, rc); err != nil {
 				return err

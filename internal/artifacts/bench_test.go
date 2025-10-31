@@ -247,7 +247,7 @@ func BenchmarkNestedArchives(b *testing.B) {
 		b.Fatal(err)
 	}
 	outerFiles := map[string]string{
-		"inner.zip": string(innerData),
+		"inner.zip":  string(innerData),
 		"readme.txt": "outer file",
 	}
 	createZipFromMap(b, outerZipPath, outerFiles)
@@ -352,6 +352,7 @@ func createBenchTarGz(b *testing.B, fileCount, fileSize int) []byte {
 	return buf.Bytes()
 }
 
+//nolint:unused // Reserved for future Helm chart benchmarks
 func createBenchHelmChart(b *testing.B, baseDir string, templateCount int) string {
 	b.Helper()
 
@@ -409,6 +410,7 @@ data:
 	return chartDir
 }
 
+//nolint:unused // Reserved for future Helm archive benchmarks
 func createBenchHelmTgz(b *testing.B, outputPath string, templateCount int) {
 	b.Helper()
 
