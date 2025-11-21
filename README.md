@@ -463,6 +463,8 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 Redactyl uses Gitleaks for all secret detection. To add new detection rules, contribute to the [Gitleaks project](https://github.com/gitleaks/gitleaks) or create custom rules in `.gitleaks.toml`.
 
+**AI Contributions:** We welcome contributions assisted by AI tools (LLMs, Copilot, etc.), provided they meet our quality standards, follow project conventions, and include comprehensive tests. The submitter is responsible for the correctness and security of the code.
+
 ## Enterprise
 
 Commercial offerings (dashboard, org policies, PR gating, SSO, hosted option) are available.
