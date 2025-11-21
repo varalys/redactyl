@@ -264,7 +264,7 @@ docker save alpine:latest > /tmp/alpine.tar
 
 ### Debugging
 ```bash
-# Enable verbose logging (TODO: add this flag)
+
 ./bin/redactyl scan --verbose /tmp/test.txt
 
 # Use delve debugger
@@ -455,9 +455,9 @@ go version  # Should be 1.25+
 - [Helm Chart Structure](https://helm.sh/docs/topics/charts/)
 
 ### Community
-- GitHub Discussions: (TODO: enable)
-- Discord: (TODO: create)
-- Email: (TODO: set up)
+- GitHub Discussions: Planned
+- Discord: Planned
+- Email: Planned
 
 ---
 

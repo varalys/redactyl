@@ -303,6 +303,28 @@ func (s *Scanner) Version() (string, error) {
 	return s.version, nil
 }
 
+// Detectors implements scanner.Scanner.
+func (s *Scanner) Detectors() ([]string, error) {
+	return []string{
+		"github-pat", "github-fine-grained-pat", "github-oauth", "github-app-token",
+		"aws-access-key", "aws-secret-key", "aws-mws-key",
+		"stripe-access-token", "stripe-secret-key",
+		"slack-webhook-url", "slack-bot-token", "slack-app-token",
+		"google-api-key", "google-oauth", "gcp-service-account",
+		"gitlab-pat", "gitlab-pipeline-token", "gitlab-runner-token",
+		"sendgrid-api-key",
+		"openai-api-key",
+		"anthropic-api-key",
+		"npm-access-token",
+		"pypi-token",
+		"docker-config-auth",
+		"jwt",
+		"private-key",
+		"generic-api-key",
+		// Note: This is a subset for display. Gitleaks has 200+ rules.
+	}, nil
+}
+
 // convertFindings maps Gitleaks findings to Redactyl findings.
 func (s *Scanner) convertFindings(gf []GitleaksFinding, ctx scanner.ScanContext) []types.Finding {
 	var findings []types.Finding

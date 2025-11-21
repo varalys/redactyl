@@ -17,7 +17,7 @@ import (
 	"github.com/redactyl/redactyl/internal/git"
 	"github.com/redactyl/redactyl/internal/ignore"
 	"github.com/redactyl/redactyl/internal/scanner"
-	"github.com/redactyl/redactyl/internal/scanner/gitleaks"
+	"github.com/redactyl/redactyl/internal/scanner/factory"
 	"github.com/redactyl/redactyl/internal/types"
 )
 
@@ -152,24 +152,7 @@ func processChunk(scnr scanner.Scanner, cfg Config, chunk []pendingScan, emit fu
 // This is a representative list of common Gitleaks rules for UI purposes.
 // The actual detection is performed by Gitleaks with its full rule set.
 func DetectorIDs() []string {
-	return []string{
-		"github-pat", "github-fine-grained-pat", "github-oauth", "github-app-token",
-		"aws-access-key", "aws-secret-key", "aws-mws-key",
-		"stripe-access-token", "stripe-secret-key",
-		"slack-webhook-url", "slack-bot-token", "slack-app-token",
-		"google-api-key", "google-oauth", "gcp-service-account",
-		"gitlab-pat", "gitlab-pipeline-token", "gitlab-runner-token",
-		"sendgrid-api-key",
-		"openai-api-key",
-		"anthropic-api-key",
-		"npm-access-token",
-		"pypi-token",
-		"docker-config-auth",
-		"jwt",
-		"private-key",
-		"generic-api-key",
-		// Note: This is a subset for display. Gitleaks has 200+ rules.
-	}
+	return factory.DefaultDetectors()
 }
 
 // Scan runs a scan and returns only findings (without stats).
@@ -187,6 +170,7 @@ type Result struct {
 	FilesScanned  int
 	Duration      time.Duration
 	ArtifactStats DeepStats
+	ArtifactErrors []error
 }
 
 // DeepStats summarizes artifact scanning abort reasons.
@@ -201,7 +185,7 @@ type DeepStats struct {
 func ScanWithStats(cfg Config) (Result, error) {
 	var result Result
 
-	// Initialize scanner (Gitleaks integration)
+	// Initialize scanner
 	scnr, err := initializeScanner(cfg)
 	if err != nil {
 		return result, fmt.Errorf("failed to initialize scanner: %w", err)
@@ -216,11 +200,11 @@ func ScanWithStats(cfg Config) (Result, error) {
 	}
 	// collect updated hashes to persist once at end
 	updated := map[string]string{}
-	threads := cfg.Threads
-	if threads <= 0 {
-		threads = runtime.GOMAXPROCS(0)
+
+	// Normalize threads for internal use
+	if cfg.Threads <= 0 {
+		cfg.Threads = runtime.GOMAXPROCS(0)
 	}
-	// working tree processing is done inline via Walk; staged/base/history use bounded parallelism
 
 	ign, _ := ignore.Load(filepath.Join(cfg.Root, ".redactylignore"))
 	ctx := context.Background()
@@ -231,227 +215,38 @@ func ScanWithStats(cfg Config) (Result, error) {
 		out = append(out, fs...)
 	}
 
-	// working tree / staged
+	// Phase 1: Working Tree (Standard)
 	if cfg.HistoryCommits == 0 && cfg.BaseBranch == "" {
-		batchSize := determineBatchSize(threads)
-		queue := make([]pendingScan, 0, batchSize)
-		var walkErr error
-
-		err := Walk(ctx, cfg, ign, func(p string, data []byte) {
-			if walkErr != nil {
-				return
-			}
-			// compute cheap content hash; small overhead but enables skipping next run
-			h := fastHash(data)
-			if !cfg.NoCache && db.Entries != nil && db.Entries[p] == h {
-				return
-			}
-			queue = append(queue, pendingScan{
-				input:    makeBatchInput(p, data, nil),
-				cacheKey: p,
-				cacheVal: h,
-			})
-			if len(queue) >= batchSize {
-				if err := processChunk(scnr, cfg, queue, emit, updated, &result); err != nil {
-					walkErr = err
-				}
-				queue = queue[:0]
-			}
-		})
-		if err != nil {
-			return result, err
-		}
-		if walkErr != nil {
-			return result, walkErr
-		}
-		if err := processChunk(scnr, cfg, queue, emit, updated, &result); err != nil {
+		if err := scanFilesystem(ctx, cfg, scnr, ign, db, emit, updated, &result); err != nil {
 			return result, err
 		}
 	}
 
-	// staged (parallel)
+	// Phase 2: Staged Changes
 	if cfg.ScanStaged {
-		files, data, err := git.StagedDiff(cfg.Root)
-		if err == nil {
-			batchSize := determineBatchSize(threads)
-			jobs := make([]pendingScan, 0, len(files))
-			for i, p := range files {
-				if !allowedByGlobs(p, cfg) {
-					continue
-				}
-				if cfg.MaxBytes > 0 && int64(len(data[i])) > cfg.MaxBytes {
-					continue
-				}
-				jobs = append(jobs, pendingScan{
-					input:    makeBatchInput(p, data[i], nil),
-					cacheKey: p,
-					cacheVal: fastHash(data[i]),
-				})
-			}
-			for len(jobs) > 0 {
-				end := batchSize
-				if end > len(jobs) {
-					end = len(jobs)
-				}
-				chunk := jobs[:end]
-				if err := processChunk(scnr, cfg, chunk, emit, updated, &result); err != nil {
-					return result, err
-				}
-				jobs = jobs[end:]
-			}
+		if err := scanStaged(cfg, scnr, emit, updated, &result); err != nil {
+			return result, err
 		}
 	}
 
-	// history (parallel)
+	// Phase 3: Git History
 	if cfg.HistoryCommits > 0 {
-		entries, err := git.LastNCommits(cfg.Root, cfg.HistoryCommits)
-		if err == nil {
-			batchSize := determineBatchSize(threads)
-			var jobs []pendingScan
-			for _, e := range entries {
-				for path, blob := range e.Files {
-					if !allowedByGlobs(path, cfg) {
-						continue
-					}
-					if ign.Match(path) {
-						continue
-					}
-					if int64(len(blob)) > cfg.MaxBytes {
-						continue
-					}
-					jobs = append(jobs, pendingScan{
-						input:    makeBatchInput(path, blob, nil),
-						cacheKey: path,
-						cacheVal: fastHash(blob),
-					})
-				}
-			}
-			for len(jobs) > 0 {
-				end := batchSize
-				if end > len(jobs) {
-					end = len(jobs)
-				}
-				chunk := jobs[:end]
-				if err := processChunk(scnr, cfg, chunk, emit, updated, &result); err != nil {
-					return result, err
-				}
-				jobs = jobs[end:]
-			}
+		if err := scanHistory(cfg, scnr, ign, emit, updated, &result); err != nil {
+			return result, err
 		}
 	}
 
-	// diff vs base branch (parallel)
+	// Phase 4: Diff vs Base
 	if cfg.BaseBranch != "" {
-		files, data, err := git.DiffAgainst(cfg.Root, cfg.BaseBranch)
-		if err == nil {
-			batchSize := determineBatchSize(threads)
-			jobs := make([]pendingScan, 0, len(files))
-			for i, p := range files {
-				if !allowedByGlobs(p, cfg) {
-					continue
-				}
-				if ign.Match(p) {
-					continue
-				}
-				if cfg.MaxBytes > 0 && int64(len(data[i])) > cfg.MaxBytes {
-					continue
-				}
-				trimmed := bytes.TrimSpace(data[i])
-				jobs = append(jobs, pendingScan{
-					input:    makeBatchInput(p, trimmed, nil),
-					cacheKey: p,
-					cacheVal: fastHash(trimmed),
-				})
-			}
-			for len(jobs) > 0 {
-				end := batchSize
-				if end > len(jobs) {
-					end = len(jobs)
-				}
-				chunk := jobs[:end]
-				if err := processChunk(scnr, cfg, chunk, emit, updated, &result); err != nil {
-					return result, err
-				}
-				jobs = jobs[end:]
-			}
+		if err := scanDiff(cfg, scnr, ign, emit, updated, &result); err != nil {
+			return result, err
 		}
 	}
 
-	// Optional deep artifact scanning (sequential orchestration, internal parallelism TBD)
+	// Phase 5: Deep Artifact Scanning
 	if cfg.ScanArchives || cfg.ScanContainers || cfg.ScanIaC || cfg.ScanHelm || cfg.ScanK8s {
-		lim := artifacts.Limits{
-			MaxArchiveBytes: cfg.MaxArchiveBytes,
-			MaxEntries:      cfg.MaxEntries,
-			MaxDepth:        cfg.MaxDepth,
-			TimeBudget:      cfg.ScanTimeBudget,
-			Workers:         cfg.Threads,
-		}
-		// Establish a global deadline across all artifacts if a global time budget is provided
-		if cfg.GlobalArtifactBudget > 0 {
-			lim.GlobalDeadline = time.Now().Add(cfg.GlobalArtifactBudget)
-		}
-		batchSize := determineBatchSize(threads)
-		artifactQueue := make([]pendingScan, 0, batchSize)
-		var artifactErr error
-		flushArtifacts := func() {
-			if len(artifactQueue) == 0 {
-				return
-			}
-			defer func() { artifactQueue = artifactQueue[:0] }()
-			if artifactErr != nil {
-				return
-			}
-			if err := processChunk(scnr, cfg, artifactQueue, emit, updated, &result); err != nil {
-				artifactErr = err
-			}
-		}
-		emitArtifact := func(p string, b []byte) {
-			if artifactErr != nil {
-				return
-			}
-			if cfg.DryRun {
-				return
-			}
-			ctx := scanner.ScanContext{
-				VirtualPath: p,
-				RealPath:    p,
-			}
-			artifactQueue = append(artifactQueue, pendingScan{
-				input:    makeBatchInput(p, b, &ctx),
-				cacheKey: p,
-				cacheVal: fastHash(b),
-			})
-			if len(artifactQueue) >= batchSize {
-				flushArtifacts()
-			}
-		}
-		// Reuse include/exclude globs to filter which artifact filenames are processed
-		allowArtifact := func(rel string) bool { return allowedByGlobs(rel, cfg) }
-		var artStats artifacts.Stats
-		if cfg.ScanArchives {
-			_ = artifacts.ScanArchivesWithStats(cfg.Root, lim, allowArtifact, emitArtifact, &artStats) //nolint:errcheck
-		}
-		if cfg.ScanContainers {
-			_ = artifacts.ScanContainersWithStats(cfg.Root, lim, allowArtifact, emitArtifact, &artStats) //nolint:errcheck
-		}
-		if cfg.ScanIaC {
-			_ = artifacts.ScanIaCWithFilter(cfg.Root, lim, allowArtifact, emitArtifact) //nolint:errcheck
-		}
-		if cfg.ScanHelm {
-			_ = artifacts.ScanHelmChartsWithFilter(cfg.Root, lim, allowArtifact, emitArtifact) //nolint:errcheck
-		}
-		if cfg.ScanK8s {
-			_ = artifacts.ScanK8sManifestsWithFilter(cfg.Root, lim, allowArtifact, emitArtifact) //nolint:errcheck
-		}
-		flushArtifacts()
-		if artifactErr != nil {
-			return result, artifactErr
-		}
-		result.ArtifactStats = DeepStats{
-			AbortedByBytes:   artStats.AbortedByBytes,
-			AbortedByEntries: artStats.AbortedByEntries,
-			AbortedByDepth:   artStats.AbortedByDepth,
-			AbortedByTime:    artStats.AbortedByTime,
+		if err := scanArtifacts(cfg, scnr, emit, updated, &result); err != nil {
+			return result, err
 		}
 	}
 
@@ -468,6 +263,244 @@ func ScanWithStats(cfg Config) (Result, error) {
 		_ = cache.Save(cfg.Root, db)
 	}
 	return result, nil
+}
+
+func scanFilesystem(ctx context.Context, cfg Config, scnr scanner.Scanner, ign ignore.Matcher, db cache.DB, emit func([]types.Finding), updated map[string]string, result *Result) error {
+	batchSize := determineBatchSize(cfg.Threads)
+	queue := make([]pendingScan, 0, batchSize)
+	var walkErr error
+
+	err := Walk(ctx, cfg, ign, func(p string, data []byte) {
+		if walkErr != nil {
+			return
+		}
+		// compute cheap content hash; small overhead but enables skipping next run
+		h := fastHash(data)
+		if !cfg.NoCache && db.Entries != nil && db.Entries[p] == h {
+			return
+		}
+		queue = append(queue, pendingScan{
+			input:    makeBatchInput(p, data, nil),
+			cacheKey: p,
+			cacheVal: h,
+		})
+		if len(queue) >= batchSize {
+			if err := processChunk(scnr, cfg, queue, emit, updated, result); err != nil {
+				walkErr = err
+			}
+			queue = queue[:0]
+		}
+	})
+	if err != nil {
+		return err
+	}
+	if walkErr != nil {
+		return walkErr
+	}
+	return processChunk(scnr, cfg, queue, emit, updated, result)
+}
+
+func scanStaged(cfg Config, scnr scanner.Scanner, emit func([]types.Finding), updated map[string]string, result *Result) error {
+	files, data, err := git.StagedDiff(cfg.Root)
+	if err != nil {
+		return err
+	}
+
+	batchSize := determineBatchSize(cfg.Threads)
+	jobs := make([]pendingScan, 0, len(files))
+	for i, p := range files {
+		if !allowedByGlobs(p, cfg) {
+			continue
+		}
+		if cfg.MaxBytes > 0 && int64(len(data[i])) > cfg.MaxBytes {
+			continue
+		}
+		jobs = append(jobs, pendingScan{
+			input:    makeBatchInput(p, data[i], nil),
+			cacheKey: p,
+			cacheVal: fastHash(data[i]),
+		})
+	}
+	for len(jobs) > 0 {
+		end := batchSize
+		if end > len(jobs) {
+			end = len(jobs)
+		}
+		chunk := jobs[:end]
+		if err := processChunk(scnr, cfg, chunk, emit, updated, result); err != nil {
+			return err
+		}
+		jobs = jobs[end:]
+	}
+	return nil
+}
+
+func scanHistory(cfg Config, scnr scanner.Scanner, ign ignore.Matcher, emit func([]types.Finding), updated map[string]string, result *Result) error {
+	entries, err := git.LastNCommits(cfg.Root, cfg.HistoryCommits)
+	if err != nil {
+		return err
+	}
+
+	batchSize := determineBatchSize(cfg.Threads)
+	var jobs []pendingScan
+	for _, e := range entries {
+		for path, blob := range e.Files {
+			if !allowedByGlobs(path, cfg) {
+				continue
+			}
+			if ign.Match(path) {
+				continue
+			}
+			if int64(len(blob)) > cfg.MaxBytes {
+				continue
+			}
+			jobs = append(jobs, pendingScan{
+				input:    makeBatchInput(path, blob, nil),
+				cacheKey: path,
+				cacheVal: fastHash(blob),
+			})
+		}
+	}
+	for len(jobs) > 0 {
+		end := batchSize
+		if end > len(jobs) {
+			end = len(jobs)
+		}
+		chunk := jobs[:end]
+		if err := processChunk(scnr, cfg, chunk, emit, updated, result); err != nil {
+			return err
+		}
+		jobs = jobs[end:]
+	}
+	return nil
+}
+
+func scanDiff(cfg Config, scnr scanner.Scanner, ign ignore.Matcher, emit func([]types.Finding), updated map[string]string, result *Result) error {
+	files, data, err := git.DiffAgainst(cfg.Root, cfg.BaseBranch)
+	if err != nil {
+		return err
+	}
+
+	batchSize := determineBatchSize(cfg.Threads)
+	jobs := make([]pendingScan, 0, len(files))
+	for i, p := range files {
+		if !allowedByGlobs(p, cfg) {
+			continue
+		}
+		if ign.Match(p) {
+			continue
+		}
+		if cfg.MaxBytes > 0 && int64(len(data[i])) > cfg.MaxBytes {
+			continue
+		}
+		trimmed := bytes.TrimSpace(data[i])
+		jobs = append(jobs, pendingScan{
+			input:    makeBatchInput(p, trimmed, nil),
+			cacheKey: p,
+			cacheVal: fastHash(trimmed),
+		})
+	}
+	for len(jobs) > 0 {
+		end := batchSize
+		if end > len(jobs) {
+			end = len(jobs)
+		}
+		chunk := jobs[:end]
+		if err := processChunk(scnr, cfg, chunk, emit, updated, result); err != nil {
+			return err
+		}
+		jobs = jobs[end:]
+	}
+	return nil
+}
+
+func scanArtifacts(cfg Config, scnr scanner.Scanner, emit func([]types.Finding), updated map[string]string, result *Result) error {
+	lim := artifacts.Limits{
+		MaxArchiveBytes: cfg.MaxArchiveBytes,
+		MaxEntries:      cfg.MaxEntries,
+		MaxDepth:        cfg.MaxDepth,
+		TimeBudget:      cfg.ScanTimeBudget,
+		Workers:         cfg.Threads,
+	}
+	// Establish a global deadline across all artifacts if a global time budget is provided
+	if cfg.GlobalArtifactBudget > 0 {
+		lim.GlobalDeadline = time.Now().Add(cfg.GlobalArtifactBudget)
+	}
+	batchSize := determineBatchSize(cfg.Threads)
+	artifactQueue := make([]pendingScan, 0, batchSize)
+	var artifactErr error
+	flushArtifacts := func() {
+		if len(artifactQueue) == 0 {
+			return
+		}
+		defer func() { artifactQueue = artifactQueue[:0] }()
+		if artifactErr != nil {
+			return
+		}
+		if err := processChunk(scnr, cfg, artifactQueue, emit, updated, result); err != nil {
+			artifactErr = err
+		}
+	}
+	emitArtifact := func(p string, b []byte) {
+		if artifactErr != nil {
+			return
+		}
+		if cfg.DryRun {
+			return
+		}
+		ctx := scanner.ScanContext{
+			VirtualPath: p,
+			RealPath:    p,
+		}
+		artifactQueue = append(artifactQueue, pendingScan{
+			input:    makeBatchInput(p, b, &ctx),
+			cacheKey: p,
+			cacheVal: fastHash(b),
+		})
+		if len(artifactQueue) >= batchSize {
+			flushArtifacts()
+		}
+	}
+	// Reuse include/exclude globs to filter which artifact filenames are processed
+	allowArtifact := func(rel string) bool { return allowedByGlobs(rel, cfg) }
+	var artStats artifacts.Stats
+	
+	if cfg.ScanArchives {
+		if err := artifacts.ScanArchivesWithStats(cfg.Root, lim, allowArtifact, emitArtifact, &artStats); err != nil {
+			result.ArtifactErrors = append(result.ArtifactErrors, err)
+		}
+	}
+	if cfg.ScanContainers {
+		if err := artifacts.ScanContainersWithStats(cfg.Root, lim, allowArtifact, emitArtifact, &artStats); err != nil {
+			result.ArtifactErrors = append(result.ArtifactErrors, err)
+		}
+	}
+	if cfg.ScanIaC {
+		if err := artifacts.ScanIaCWithFilter(cfg.Root, lim, allowArtifact, emitArtifact); err != nil {
+			result.ArtifactErrors = append(result.ArtifactErrors, err)
+		}
+	}
+	if cfg.ScanHelm {
+		if err := artifacts.ScanHelmChartsWithFilter(cfg.Root, lim, allowArtifact, emitArtifact); err != nil {
+			result.ArtifactErrors = append(result.ArtifactErrors, err)
+		}
+	}
+	if cfg.ScanK8s {
+		if err := artifacts.ScanK8sManifestsWithFilter(cfg.Root, lim, allowArtifact, emitArtifact); err != nil {
+			result.ArtifactErrors = append(result.ArtifactErrors, err)
+		}
+	}
+	flushArtifacts()
+	if artifactErr != nil {
+		return artifactErr
+	}
+	result.ArtifactStats = DeepStats{
+		AbortedByBytes:   artStats.AbortedByBytes,
+		AbortedByEntries: artStats.AbortedByEntries,
+		AbortedByDepth:   artStats.AbortedByDepth,
+		AbortedByTime:    artStats.AbortedByTime,
+	}
+	return nil
 }
 
 // fastHash returns a short hex digest for quick change detection.
@@ -587,22 +620,10 @@ func trimGlobPrefix(g string) string {
 }
 
 // initializeScanner creates a scanner instance from configuration.
-// For now, it always creates a Gitleaks scanner. In the future, this could
-// support multiple scanner types based on configuration.
+// It uses the scanner factory to create the appropriate scanner.
 func initializeScanner(cfg Config) (scanner.Scanner, error) {
-	// Try to auto-detect .gitleaks.toml if not explicitly configured
-	if cfg.GitleaksConfig.GetConfigPath() == "" {
-		if detected := gitleaks.DetectConfigPath(cfg.Root); detected != "" {
-			cfgPath := detected
-			cfg.GitleaksConfig.ConfigPath = &cfgPath
-		}
-	}
-
-	// Create Gitleaks scanner
-	scnr, err := gitleaks.NewScanner(cfg.GitleaksConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create gitleaks scanner: %w", err)
-	}
-
-	return scnr, nil
+	return factory.New(factory.Config{
+		Root:           cfg.Root,
+		GitleaksConfig: cfg.GitleaksConfig,
+	})
 }

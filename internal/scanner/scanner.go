@@ -21,6 +21,9 @@ type Scanner interface {
 
 	// Version returns the scanner version information.
 	Version() (string, error)
+
+	// Detectors returns the list of detector IDs supported by this scanner.
+	Detectors() ([]string, error)
 }
 
 // ScanContext provides additional context for scanning artifacts.

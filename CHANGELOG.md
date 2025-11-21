@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project adheres to Semantic Versioning.
 
-## Unreleased
+## v1.0.0 - 2025-11-21
 
 ### Added
 - Deep artifact scanning (archives, containers, IaC hotspots)
@@ -34,4 +34,4 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 
 ### Fixed
 - Lint and docs workflow stability (errcheck/gocritic tidy ups; `gendocs` markers in README)
-
+- **Silent failures during deep artifact scanning are now reported in `Result.ArtifactErrors`.**

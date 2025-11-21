@@ -19,7 +19,8 @@ func (noopScanner) ScanWithContext(scanner.ScanContext, []byte) ([]types.Finding
 
 func (noopScanner) ScanBatch([]scanner.BatchInput) ([]types.Finding, error) { return nil, nil }
 
-func (noopScanner) Version() (string, error) { return "noop", nil }
+func (noopScanner) Version() (string, error)                            { return "1.0", nil }
+func (noopScanner) Detectors() ([]string, error)                          { return nil, nil }
 
 func BenchmarkEngineProcessChunk(b *testing.B) {
 	cfg := Config{}
