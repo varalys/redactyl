@@ -148,6 +148,12 @@ type Model struct {
 
 	// Export mode state
 	showExportMenu   bool              // True when export format menu is shown
+
+	// Diff view state
+	diffMode         bool              // True when showing diff view
+	diffNewFindings  []types.Finding   // Findings added since last scan
+	diffFixedFindings []types.Finding  // Findings removed since last scan
+	diffPrevTimestamp time.Time        // Timestamp of the previous scan
 }
 
 // SortColumn constants
@@ -533,6 +539,63 @@ func (m *Model) getSortIndicator() string {
 	return fmt.Sprintf(" [%s %s]", m.sortColumn, arrow)
 }
 
+// computeDiff compares current findings with previous scan and populates diff fields
+func (m *Model) computeDiff() bool {
+	// Load audit history to get previous scan
+	auditLog := audit.NewAuditLog(".")
+	history, err := auditLog.LoadHistory()
+	if err != nil || len(history) < 2 {
+		// Need at least 2 scans to diff
+		return false
+	}
+
+	// Current scan is history[0], previous is history[1]
+	prevScan := history[1]
+	m.diffPrevTimestamp = prevScan.Timestamp
+
+	// Build a set of previous finding keys for fast lookup
+	prevKeys := make(map[string]bool)
+	for _, f := range prevScan.AllFindings {
+		key := f.Path + "|" + f.Detector + "|" + f.Match
+		prevKeys[key] = true
+	}
+
+	// Build a set of current finding keys
+	currKeys := make(map[string]bool)
+	for _, f := range m.findings {
+		key := f.Path + "|" + f.Detector + "|" + f.Match
+		currKeys[key] = true
+	}
+
+	// Find new findings (in current but not in previous)
+	m.diffNewFindings = nil
+	for _, f := range m.findings {
+		key := f.Path + "|" + f.Detector + "|" + f.Match
+		if !prevKeys[key] {
+			m.diffNewFindings = append(m.diffNewFindings, f)
+		}
+	}
+
+	// Find fixed findings (in previous but not in current)
+	m.diffFixedFindings = nil
+	for _, f := range prevScan.AllFindings {
+		key := f.Path + "|" + f.Detector + "|" + f.Match
+		if !currKeys[key] {
+			m.diffFixedFindings = append(m.diffFixedFindings, f)
+		}
+	}
+
+	return true
+}
+
+// exitDiffMode exits diff mode and returns to normal view
+func (m *Model) exitDiffMode() {
+	m.diffMode = false
+	m.diffNewFindings = nil
+	m.diffFixedFindings = nil
+	m.rebuildTableRows()
+}
+
 // toggleSelection toggles selection on the currently displayed finding
 func (m *Model) toggleSelection() {
 	idx := m.table.Cursor()
@@ -816,7 +879,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusTimeout = &timeout
 			m.statusMessage = "Showing LOW severity only (Esc to clear)"
 			return m, nil
-		case "esc": // Clear filters
+		case "esc": // Clear filters or exit diff mode
+			if m.diffMode {
+				m.exitDiffMode()
+				timeout := time.Now().Add(3 * time.Second)
+				m.statusTimeout = &timeout
+				m.statusMessage = "Exited diff view"
+				return m, nil
+			}
 			if m.searchQuery != "" || m.severityFilter != "" {
 				m.clearFilters()
 				timeout := time.Now().Add(3 * time.Second)
@@ -951,12 +1021,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !m.showEmpty {
 				return m, m.copyFindingToClipboard()
 			}
-		case "r": // Rescan key
-			if m.viewingCached {
-				// In cached mode, show error message
+		case "D": // Toggle diff mode
+			if m.diffMode {
+				m.exitDiffMode()
 				timeout := time.Now().Add(3 * time.Second)
 				m.statusTimeout = &timeout
-				m.statusMessage = "Rescan not available - exit and run 'redactyl scan -i' to rescan"
+				m.statusMessage = "Exited diff view"
+				return m, nil
+			} else {
+				if m.computeDiff() {
+					m.diffMode = true
+					timeout := time.Now().Add(5 * time.Second)
+					m.statusTimeout = &timeout
+					m.statusMessage = fmt.Sprintf("Diff: %d new, %d fixed since %s",
+						len(m.diffNewFindings), len(m.diffFixedFindings),
+						m.diffPrevTimestamp.Format("Jan 2, 15:04"))
+				} else {
+					timeout := time.Now().Add(3 * time.Second)
+					m.statusTimeout = &timeout
+					m.statusMessage = "Need at least 2 scans to show diff"
+				}
+				return m, nil
+			}
+		case "r": // Rescan key
+			if m.rescanFunc == nil {
+				// No rescan function provided
+				timeout := time.Now().Add(3 * time.Second)
+				m.statusTimeout = &timeout
+				m.statusMessage = "Rescan not available"
 				return m, nil
 			}
 			if !m.scanning { // Allow rescan anytime (not just when empty)
@@ -1439,6 +1531,11 @@ func (m Model) View() string {
 		lines = append(lines, formatRow("i / I", "Ignore / unignore file"))
 		lines = append(lines, formatRow("b / U", "Baseline / unbaseline"))
 		lines = append(lines, formatRow("r", "Rescan"))
+		lines = append(lines, "")
+
+		// Diff & History
+		lines = append(lines, sectionStyle.Render("Diff & History"))
+		lines = append(lines, formatRow("D", "Diff vs previous scan"))
 		lines = append(lines, formatRow("a", "View audit history"))
 		lines = append(lines, "")
 
@@ -1500,6 +1597,103 @@ func (m Model) View() string {
 			Render(exportContent)
 
 		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, exportBox)
+	}
+
+	// Show diff view popup if requested
+	if m.diffMode {
+		titleStyle := lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("15"))
+
+		newStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("9")). // Red for new findings
+			Bold(true)
+
+		fixedStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("10")). // Green for fixed findings
+			Bold(true)
+
+		dimStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("8"))
+
+		var lines []string
+		lines = append(lines, titleStyle.Render(fmt.Sprintf("DIFF: %s vs Current",
+			m.diffPrevTimestamp.Format("Jan 2, 15:04"))))
+		lines = append(lines, "")
+
+		// Summary line
+		summaryParts := []string{}
+		if len(m.diffNewFindings) > 0 {
+			summaryParts = append(summaryParts,
+				newStyle.Render(fmt.Sprintf("+%d new", len(m.diffNewFindings))))
+		}
+		if len(m.diffFixedFindings) > 0 {
+			summaryParts = append(summaryParts,
+				fixedStyle.Render(fmt.Sprintf("-%d fixed", len(m.diffFixedFindings))))
+		}
+		if len(summaryParts) == 0 {
+			lines = append(lines, dimStyle.Render("No changes between scans"))
+		} else {
+			lines = append(lines, strings.Join(summaryParts, "  "))
+		}
+		lines = append(lines, "")
+
+		// New findings section
+		if len(m.diffNewFindings) > 0 {
+			lines = append(lines, newStyle.Render("NEW FINDINGS (added since last scan):"))
+			maxShow := 8
+			if len(m.diffNewFindings) < maxShow {
+				maxShow = len(m.diffNewFindings)
+			}
+			for i := 0; i < maxShow; i++ {
+				f := m.diffNewFindings[i]
+				line := fmt.Sprintf("  + [%s] %s:%d  %s",
+					severityText(f.Severity),
+					f.Path,
+					f.Line,
+					f.Detector)
+				lines = append(lines, newStyle.Render(line))
+			}
+			if len(m.diffNewFindings) > maxShow {
+				lines = append(lines, dimStyle.Render(
+					fmt.Sprintf("  ... and %d more", len(m.diffNewFindings)-maxShow)))
+			}
+			lines = append(lines, "")
+		}
+
+		// Fixed findings section
+		if len(m.diffFixedFindings) > 0 {
+			lines = append(lines, fixedStyle.Render("FIXED FINDINGS (removed since last scan):"))
+			maxShow := 8
+			if len(m.diffFixedFindings) < maxShow {
+				maxShow = len(m.diffFixedFindings)
+			}
+			for i := 0; i < maxShow; i++ {
+				f := m.diffFixedFindings[i]
+				line := fmt.Sprintf("  - [%s] %s:%d  %s",
+					severityText(f.Severity),
+					f.Path,
+					f.Line,
+					f.Detector)
+				lines = append(lines, fixedStyle.Render(line))
+			}
+			if len(m.diffFixedFindings) > maxShow {
+				lines = append(lines, dimStyle.Render(
+					fmt.Sprintf("  ... and %d more", len(m.diffFixedFindings)-maxShow)))
+			}
+			lines = append(lines, "")
+		}
+
+		lines = append(lines, "")
+		lines = append(lines, dimStyle.Italic(true).Render("Press D or Esc to close"))
+
+		diffContent := lipgloss.JoinVertical(lipgloss.Left, lines...)
+		diffBox := popupStyle.
+			Width(70).
+			Padding(2, 3).
+			Render(diffContent)
+
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, diffBox)
 	}
 
 	// Show scan history popup if requested

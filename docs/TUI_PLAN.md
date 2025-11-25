@@ -54,6 +54,14 @@ Interactive Terminal User Interface for reviewing, filtering, and remediating sc
 | `?` / `h` | Toggle help screen |
 | `q` / `Ctrl+c` | Quit |
 
+### Diff View (press `D`)
+| Key | Action |
+|-----|--------|
+| `D` | Compare current scan vs previous scan |
+| `D` / `Esc` | Close diff view |
+
+Shows new findings (red, +) and fixed findings (green, -) since last scan.
+
 ### Scan History (press `a`)
 | Key | Action |
 |-----|--------|
@@ -78,12 +86,6 @@ Interactive Terminal User Interface for reviewing, filtering, and remediating sc
 ---
 
 ## Planned Features (TODO)
-
-### Phase 9: Diff View
-- [ ] **Diff Mode** (`D`): Compare current scan vs previous scan
-- [ ] Show new findings (added since last scan)
-- [ ] Show fixed findings (removed since last scan)
-- [ ] Color coding: green for fixed, red for new
 
 ### Phase 10: Enhanced Context
 - [ ] **Expand Context** (`+`/`-`): Show more/fewer lines around finding
