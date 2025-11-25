@@ -8,9 +8,14 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/term"
+
+	"github.com/redactyl/redactyl/internal/audit"
+	"github.com/redactyl/redactyl/internal/cache"
 	"github.com/redactyl/redactyl/internal/config"
 	"github.com/redactyl/redactyl/internal/engine"
 	"github.com/redactyl/redactyl/internal/report"
+	"github.com/redactyl/redactyl/internal/tui"
 	"github.com/redactyl/redactyl/internal/types"
 	"github.com/redactyl/redactyl/internal/update"
 	"github.com/spf13/cobra"
@@ -45,6 +50,10 @@ var (
 	flagGlobalArtifactBudget time.Duration
 	// json shape
 	flagJSONExtended bool
+
+	// TUI mode
+	flagNoTUI    bool // Disable TUI (for CI/CD or piping output)
+	flagViewLast bool // View last scan results without rescanning
 )
 
 func init() {
@@ -56,6 +65,13 @@ func init() {
 	rootCmd.AddCommand(cmd)
 
 	cmd.Flags().StringVarP(&flagPath, "path", "p", ".", "path to scan")
+	cmd.Flags().BoolVar(&flagNoTUI, "no-tui", false, "disable interactive TUI mode (for CI/CD or piping output)")
+	cmd.Flags().BoolVar(&flagViewLast, "view-last", false, "view last scan results in TUI without rescanning")
+
+	// Backward compatibility: -i now does nothing (TUI is default), but keep flag to avoid breaking existing scripts
+	var flagInteractiveDeprecated bool
+	cmd.Flags().BoolVarP(&flagInteractiveDeprecated, "interactive", "i", false, "deprecated: TUI is now the default, use --no-tui to disable")
+	_ = cmd.Flags().MarkDeprecated("interactive", "TUI is now the default mode. Use --no-tui to disable it.")
 	cmd.Flags().BoolVar(&flagStaged, "staged", false, "scan staged changes")
 	cmd.Flags().IntVar(&flagHistory, "history", 0, "scan last N commits (0=off)")
 	cmd.Flags().StringVar(&flagBase, "base", "", "scan diff vs base branch (e.g. main)")
@@ -155,6 +171,28 @@ func mergeGitleaksConfig(gcfg, lcfg config.FileConfig) config.GitleaksConfig {
 
 func runScan(cmd *cobra.Command, _ []string) error {
 	abs, _ := filepath.Abs(flagPath)
+
+	// Handle --view-last flag: load cached results and start TUI
+	if flagViewLast {
+		results, err := cache.LoadResults(abs)
+		if err != nil {
+			return fmt.Errorf("no cached results found: %w\nRun a scan first with 'redactyl scan -i' to cache results", err)
+		}
+
+		baseline, _ := report.LoadBaseline("redactyl.baseline.json")
+
+		// Create rescan function for TUI
+		rescanFunc := func() ([]types.Finding, error) {
+			return nil, fmt.Errorf("rescan not available in view-only mode - exit and run 'redactyl scan -i' to rescan")
+		}
+
+		// Start TUI with ALL cached results (TUI will handle baseline display)
+		if err := tui.RunCachedWithBaseline(results.Findings, baseline, rescanFunc, results.Timestamp); err != nil {
+			return err
+		}
+		return nil
+	}
+
 	// Load configs: CLI > local > global
 	var gcfg, lcfg config.FileConfig
 	if c, err := config.LoadGlobal(); err == nil {
@@ -238,6 +276,107 @@ func runScan(cmd *cobra.Command, _ []string) error {
 	if newFindings == nil {
 		newFindings = []types.Finding{}
 	} // no `null` in JSON
+
+	// Log scan to audit trail (for compliance/reporting)
+	// If current scan found 0 findings due to caching, use cached results for audit
+	auditFindings := res.Findings
+	if len(res.Findings) == 0 {
+		if cached, err := cache.LoadResults(abs); err == nil && len(cached.Findings) > 0 {
+			auditFindings = cached.Findings
+			newFindings = report.FilterNewFindings(auditFindings, baseline)
+			if newFindings == nil {
+				newFindings = []types.Finding{}
+			}
+		}
+	}
+
+	auditLog := audit.NewAuditLog(abs)
+	auditRecord := audit.CreateScanRecord(
+		abs,
+		auditFindings,
+		newFindings,
+		res.FilesScanned,
+		res.Duration,
+		"redactyl.baseline.json",
+	)
+	if err := auditLog.LogScan(auditRecord); err != nil {
+		// Non-fatal: just warn
+		_, _ = fmt.Fprintf(os.Stderr, "Warning: failed to write audit log: %v\n", err)
+	}
+
+	// Determine if we should use TUI
+	// TUI is the default UNLESS:
+	// - User explicitly disabled it with --no-tui
+	// - User requested specific output format (--json, --sarif)
+	// - Output is being piped (not a terminal)
+	useTUI := !flagNoTUI && !flagJSON && !flagSARIF
+	if useTUI && !isTerminal(os.Stdout) {
+		// Auto-disable TUI when output is redirected/piped
+		useTUI = false
+	}
+
+	if useTUI {
+		// Callback for rescanning
+		rescanFunc := func() ([]types.Finding, error) {
+			// Force no cache
+			newCfg := cfg
+			newCfg.NoCache = true
+			newRes, err := engine.ScanWithStats(newCfg)
+			if err != nil {
+				return nil, err
+			}
+			// Save the fresh scan results to cache
+			if len(newRes.Findings) > 0 {
+				if err := cache.SaveResults(abs, newRes.Findings); err != nil {
+					_, _ = fmt.Fprintf(os.Stderr, "Warning: failed to cache results: %v\n", err)
+				}
+			}
+			// Return ALL findings (TUI will handle baseline filtering/display)
+			return newRes.Findings, nil
+		}
+
+		// Determine what findings to show in TUI
+		// Priority: 1) Current scan if has findings, 2) Cached results, 3) Empty
+		findingsToShow := res.Findings
+		var cachedTime time.Time
+		viewingCached := false
+
+		if len(res.Findings) == 0 {
+			// No findings from current scan - try to load from cache
+			if cached, err := cache.LoadResults(abs); err == nil && len(cached.Findings) > 0 {
+				findingsToShow = cached.Findings
+				cachedTime = cached.Timestamp
+				viewingCached = true
+			}
+		} else {
+			// We have findings from current scan - save them to cache
+			if err := cache.SaveResults(abs, res.Findings); err != nil {
+				_, _ = fmt.Fprintf(os.Stderr, "Warning: failed to cache results: %v\n", err)
+			}
+		}
+
+		// Pass ALL findings to TUI (not just new ones)
+		// TUI will mark baselined findings as reviewed
+		if viewingCached {
+			if err := tui.RunCachedWithBaseline(findingsToShow, baseline, rescanFunc, cachedTime); err != nil {
+				return err
+			}
+		} else {
+			if err := tui.RunWithBaseline(findingsToShow, baseline, rescanFunc); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	// For non-TUI modes, save results to cache (only if we found something)
+	// Don't overwrite cached results with empty results from a cache-hit scan
+	if len(res.Findings) > 0 {
+		if err := cache.SaveResults(abs, res.Findings); err != nil {
+			// Non-fatal: just warn
+			_, _ = fmt.Fprintf(os.Stderr, "Warning: failed to cache results: %v\n", err)
+		}
+	}
 
 	switch {
 	case flagSARIF:
@@ -351,6 +490,11 @@ func regexpQuote(s string) string {
 	// escape backslashes and special regex meta. Keep it simple.
 	replacer := strings.NewReplacer(`\`, `\\`, `.`, `\.`, `*`, `\*`, `+`, `\+`, `?`, `\?`, `(`, `\(`, `)`, `\)`, `[`, `\[`, `]`, `\]`, `{`, `\{`, `}`, `\}`, `^`, `\^`, `$`, `\$`, `|`, `\|`)
 	return replacer.Replace(s)
+}
+
+// isTerminal checks if the given file is a terminal (not redirected/piped)
+func isTerminal(f *os.File) bool {
+	return term.IsTerminal(int(f.Fd()))
 }
 
 func activeSetSummary(cfg engine.Config) string {
