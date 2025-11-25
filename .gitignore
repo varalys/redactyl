@@ -46,3 +46,8 @@ redactyl-findings.json
 *.sarif.json
 remediation.json
 purge.json
+
+# AI assistant context files (contributors may have their own)
+CLAUDE.md
+GEMINI.md
+.gemini-clipboard/
