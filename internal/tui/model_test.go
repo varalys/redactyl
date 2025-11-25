@@ -470,6 +470,103 @@ func TestParseVirtualPath(t *testing.T) {
 	}
 }
 
+func TestExtractVirtualFile_InvalidPath(t *testing.T) {
+	// Non-virtual path should error
+	_, err := extractVirtualFile("regular/file.go")
+	if err == nil {
+		t.Error("expected error for non-virtual path")
+	}
+}
+
+func TestExtractVirtualFile_NonexistentArchive(t *testing.T) {
+	// Nonexistent archive should error
+	_, err := extractVirtualFile("nonexistent.zip::file.txt")
+	if err == nil {
+		t.Error("expected error for nonexistent archive")
+	}
+}
+
+func TestExtractFromArchive_UnsupportedType(t *testing.T) {
+	// Unsupported archive type should error
+	_, err := extractFromArchive("file.rar", "internal.txt")
+	if err == nil {
+		t.Error("expected error for unsupported archive type")
+	}
+	if !strings.Contains(err.Error(), "unsupported") {
+		t.Errorf("error should mention 'unsupported', got: %v", err)
+	}
+}
+
+// =============================================================================
+// Syntax Highlighting Tests
+// =============================================================================
+
+func TestHighlightLine_Go(t *testing.T) {
+	code := `func main() { fmt.Println("hello") }`
+	result := highlightLine(code, "main.go")
+
+	// Result should contain ANSI escape codes (syntax highlighting)
+	if !strings.Contains(result, "\x1b[") {
+		t.Error("expected ANSI escape codes in highlighted Go code")
+	}
+
+	// Should still contain the original text
+	if !strings.Contains(result, "func") {
+		t.Error("highlighted code should contain 'func'")
+	}
+}
+
+func TestHighlightLine_UnknownExtension(t *testing.T) {
+	code := "some random text"
+	result := highlightLine(code, "file.unknown")
+
+	// Unknown extensions should return original code
+	if result != code {
+		t.Errorf("unknown extension should return original code, got: %s", result)
+	}
+}
+
+func TestHighlightLine_VirtualPath(t *testing.T) {
+	code := `{"key": "value"}`
+	// Simulate extracting filename from virtual path
+	virtualPath := "archive.tar::layer::config.json"
+	parts := strings.Split(virtualPath, "::")
+	filename := parts[len(parts)-1]
+
+	result := highlightLine(code, filename)
+
+	// JSON should be highlighted
+	if !strings.Contains(result, "\x1b[") {
+		t.Error("expected ANSI escape codes in highlighted JSON code")
+	}
+}
+
+func TestHighlightCode_MultiLine(t *testing.T) {
+	code := `package main
+
+func main() {
+	println("hello")
+}`
+	result := highlightCode(code, "main.go")
+
+	// Should contain highlighting
+	if !strings.Contains(result, "\x1b[") {
+		t.Error("expected ANSI escape codes in highlighted code")
+	}
+
+	// Should preserve newlines
+	if !strings.Contains(result, "\n") {
+		t.Error("highlighted code should preserve newlines")
+	}
+}
+
+func TestHighlightCode_EmptyCode(t *testing.T) {
+	result := highlightCode("", "main.go")
+	if result != "" {
+		t.Error("empty code should return empty string")
+	}
+}
+
 // =============================================================================
 // Context Expansion Tests
 // =============================================================================

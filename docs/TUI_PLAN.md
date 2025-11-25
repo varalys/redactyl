@@ -68,7 +68,7 @@ Shows new findings (red, +) and fixed findings (green, -) since last scan.
 | `+` / `=` | Show more context lines around finding |
 | `-` / `_` | Show fewer context lines around finding |
 
-Context view shows line numbers and highlights the finding line. Git commit info (hash, author, date) is displayed when available.
+Context view shows line numbers, syntax highlighting (powered by Chroma), and highlights the finding line. Git commit info (hash, author, date) is displayed when available.
 
 ### Grouping
 | Key | Action |
@@ -84,7 +84,7 @@ Groups show a count of findings and can be expanded/collapsed. Press `gf` or `gd
 For findings inside archives or containers (paths containing `::`):
 - Detail pane shows "VIRTUAL FILE" warning in yellow
 - Archive/Layer/File breakdown is displayed
-- Pressing `o` to open shows "Cannot open virtual file" message
+- Pressing `o` extracts to temp and opens in editor (supports nested archives)
 - Git blame is skipped for virtual files
 
 ### Scan History (press `a`)
@@ -112,8 +112,6 @@ For findings inside archives or containers (paths containing `::`):
 
 ## Planned Features (TODO)
 
-- Extract virtual files to temp and open
-- Syntax highlighting in context preview
 - More export formats
 
 ---

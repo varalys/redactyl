@@ -1,9 +1,15 @@
 package tui
 
 import (
+	"archive/tar"
+	"archive/zip"
+	"bytes"
+	"compress/gzip"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -31,6 +37,326 @@ func parseVirtualPath(path string) (archive string, internal string) {
 	return path[:idx], path[idx+2:]
 }
 
+// extractVirtualFile extracts a file from an archive to a temp directory
+// Returns the path to the extracted file or an error
+func extractVirtualFile(virtualPath string) (string, error) {
+	archive, internal := parseVirtualPath(virtualPath)
+	if internal == "" {
+		return "", fmt.Errorf("not a virtual path: %s", virtualPath)
+	}
+
+	// Create temp directory for extracted files
+	tempDir, err := os.MkdirTemp("", "redactyl-extract-*")
+	if err != nil {
+		return "", fmt.Errorf("failed to create temp dir: %w", err)
+	}
+
+	// Determine the final filename (last part of internal path)
+	parts := strings.Split(internal, "::")
+	filename := parts[len(parts)-1]
+
+	// Create the output file path
+	outputPath := filepath.Join(tempDir, filename)
+
+	// Extract based on archive type
+	content, err := extractFromArchive(archive, internal)
+	if err != nil {
+		os.RemoveAll(tempDir)
+		return "", err
+	}
+
+	// Write to temp file
+	if err := os.WriteFile(outputPath, content, 0600); err != nil {
+		os.RemoveAll(tempDir)
+		return "", fmt.Errorf("failed to write temp file: %w", err)
+	}
+
+	return outputPath, nil
+}
+
+// extractFromArchive extracts content from an archive given the internal path
+func extractFromArchive(archivePath string, internalPath string) ([]byte, error) {
+	lower := strings.ToLower(archivePath)
+
+	switch {
+	case strings.HasSuffix(lower, ".zip"):
+		return extractFromZip(archivePath, internalPath)
+	case strings.HasSuffix(lower, ".tar.gz") || strings.HasSuffix(lower, ".tgz"):
+		return extractFromTarGz(archivePath, internalPath)
+	case strings.HasSuffix(lower, ".tar"):
+		return extractFromTar(archivePath, internalPath)
+	case strings.HasSuffix(lower, ".gz"):
+		return extractFromGz(archivePath)
+	default:
+		return nil, fmt.Errorf("unsupported archive type: %s", archivePath)
+	}
+}
+
+func extractFromZip(archivePath string, internalPath string) ([]byte, error) {
+	// Handle nested paths: "layer::file.txt" means find "file.txt" after traversing "layer"
+	parts := strings.Split(internalPath, "::")
+	targetFile := parts[len(parts)-1]
+
+	r, err := zip.OpenReader(archivePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open zip: %w", err)
+	}
+	defer r.Close()
+
+	// If there's nesting, we need to find the nested archive first
+	if len(parts) > 1 {
+		// Find the first nested archive
+		nestedArchive := parts[0]
+		for _, f := range r.File {
+			if f.Name == nestedArchive || strings.HasSuffix(f.Name, "/"+nestedArchive) {
+				rc, err := f.Open()
+				if err != nil {
+					continue
+				}
+				content, err := io.ReadAll(rc)
+				rc.Close()
+				if err != nil {
+					return nil, err
+				}
+				// Recursively extract from nested archive
+				remainingPath := strings.Join(parts[1:], "::")
+				return extractFromNestedArchive(nestedArchive, content, remainingPath)
+			}
+		}
+		return nil, fmt.Errorf("nested archive not found: %s", nestedArchive)
+	}
+
+	// Direct file in zip
+	for _, f := range r.File {
+		if f.Name == targetFile || strings.HasSuffix(f.Name, "/"+targetFile) {
+			rc, err := f.Open()
+			if err != nil {
+				return nil, err
+			}
+			defer rc.Close()
+			return io.ReadAll(rc)
+		}
+	}
+
+	return nil, fmt.Errorf("file not found in zip: %s", targetFile)
+}
+
+func extractFromTar(archivePath string, internalPath string) ([]byte, error) {
+	f, err := os.Open(archivePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open tar: %w", err)
+	}
+	defer f.Close()
+
+	return extractFromTarReader(tar.NewReader(f), internalPath)
+}
+
+func extractFromTarGz(archivePath string, internalPath string) ([]byte, error) {
+	f, err := os.Open(archivePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open tgz: %w", err)
+	}
+	defer f.Close()
+
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create gzip reader: %w", err)
+	}
+	defer gz.Close()
+
+	return extractFromTarReader(tar.NewReader(gz), internalPath)
+}
+
+func extractFromTarReader(tr *tar.Reader, internalPath string) ([]byte, error) {
+	parts := strings.Split(internalPath, "::")
+	targetFile := parts[len(parts)-1]
+
+	for {
+		hdr, err := tr.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		// Handle nested archives (like container layers)
+		if len(parts) > 1 {
+			nestedArchive := parts[0]
+			// Match layer.tar pattern for containers
+			if strings.HasSuffix(hdr.Name, "/layer.tar") {
+				layerID := filepath.Dir(hdr.Name)
+				if i := strings.LastIndex(layerID, "/"); i >= 0 {
+					layerID = layerID[i+1:]
+				}
+				if layerID == nestedArchive {
+					content, err := io.ReadAll(tr)
+					if err != nil {
+						return nil, err
+					}
+					remainingPath := strings.Join(parts[1:], "::")
+					return extractFromNestedArchive("layer.tar", content, remainingPath)
+				}
+			}
+			// Direct nested archive match
+			if hdr.Name == nestedArchive || strings.HasSuffix(hdr.Name, "/"+nestedArchive) {
+				content, err := io.ReadAll(tr)
+				if err != nil {
+					return nil, err
+				}
+				remainingPath := strings.Join(parts[1:], "::")
+				return extractFromNestedArchive(nestedArchive, content, remainingPath)
+			}
+			continue
+		}
+
+		// Direct file match
+		if hdr.Name == targetFile || strings.HasSuffix(hdr.Name, "/"+targetFile) {
+			return io.ReadAll(tr)
+		}
+	}
+
+	return nil, fmt.Errorf("file not found in tar: %s", targetFile)
+}
+
+func extractFromGz(archivePath string) ([]byte, error) {
+	f, err := os.Open(archivePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open gz: %w", err)
+	}
+	defer f.Close()
+
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create gzip reader: %w", err)
+	}
+	defer gz.Close()
+
+	return io.ReadAll(gz)
+}
+
+func extractFromNestedArchive(archiveName string, content []byte, internalPath string) ([]byte, error) {
+	lower := strings.ToLower(archiveName)
+
+	switch {
+	case strings.HasSuffix(lower, ".zip"):
+		r, err := zip.NewReader(bytes.NewReader(content), int64(len(content)))
+		if err != nil {
+			return nil, err
+		}
+		parts := strings.Split(internalPath, "::")
+		targetFile := parts[len(parts)-1]
+
+		if len(parts) > 1 {
+			// More nesting
+			nestedArchive := parts[0]
+			for _, f := range r.File {
+				if f.Name == nestedArchive || strings.HasSuffix(f.Name, "/"+nestedArchive) {
+					rc, err := f.Open()
+					if err != nil {
+						continue
+					}
+					nestedContent, err := io.ReadAll(rc)
+					rc.Close()
+					if err != nil {
+						return nil, err
+					}
+					remainingPath := strings.Join(parts[1:], "::")
+					return extractFromNestedArchive(nestedArchive, nestedContent, remainingPath)
+				}
+			}
+			return nil, fmt.Errorf("nested archive not found: %s", nestedArchive)
+		}
+
+		for _, f := range r.File {
+			if f.Name == targetFile || strings.HasSuffix(f.Name, "/"+targetFile) {
+				rc, err := f.Open()
+				if err != nil {
+					return nil, err
+				}
+				defer rc.Close()
+				return io.ReadAll(rc)
+			}
+		}
+		return nil, fmt.Errorf("file not found in nested zip: %s", targetFile)
+
+	case strings.HasSuffix(lower, ".tar.gz") || strings.HasSuffix(lower, ".tgz"):
+		gz, err := gzip.NewReader(bytes.NewReader(content))
+		if err != nil {
+			return nil, err
+		}
+		defer gz.Close()
+		return extractFromTarReader(tar.NewReader(gz), internalPath)
+
+	case strings.HasSuffix(lower, ".tar"), strings.HasSuffix(lower, "layer.tar"):
+		return extractFromTarReader(tar.NewReader(bytes.NewReader(content)), internalPath)
+
+	default:
+		// If it's the final file (not an archive), just return content
+		if internalPath == "" || internalPath == archiveName {
+			return content, nil
+		}
+		return nil, fmt.Errorf("unsupported nested archive type: %s", archiveName)
+	}
+}
+
+// openVirtualFile extracts a virtual file to temp and opens it in the editor
+func (m Model) openVirtualFile(f *types.Finding) tea.Cmd {
+	return func() tea.Msg {
+		tempPath, err := extractVirtualFile(f.Path)
+		if err != nil {
+			return statusMsg(fmt.Sprintf("Extract failed: %v", err))
+		}
+
+		editor := os.Getenv("EDITOR")
+		if editor == "" {
+			editor = "vim"
+		}
+
+		// Build args based on editor type
+		var args []string
+		editorBase := editor
+		if idx := strings.LastIndex(editor, "/"); idx != -1 {
+			editorBase = editor[idx+1:]
+		}
+
+		switch editorBase {
+		case "code", "code-insiders":
+			args = []string{"-g", fmt.Sprintf("%s:%d:%d", tempPath, f.Line, f.Column)}
+		case "subl", "sublime", "sublime_text":
+			args = []string{fmt.Sprintf("%s:%d:%d", tempPath, f.Line, f.Column)}
+		case "atom":
+			args = []string{fmt.Sprintf("%s:%d:%d", tempPath, f.Line, f.Column)}
+		case "emacs", "emacsclient":
+			args = []string{fmt.Sprintf("+%d:%d", f.Line, f.Column), tempPath}
+		case "nano":
+			args = []string{fmt.Sprintf("+%d,%d", f.Line, f.Column), tempPath}
+		case "vi", "vim", "nvim":
+			if f.Column > 0 {
+				args = []string{fmt.Sprintf("+call cursor(%d,%d)", f.Line, f.Column), tempPath}
+			} else {
+				args = []string{fmt.Sprintf("+%d", f.Line), tempPath}
+			}
+		default:
+			args = []string{fmt.Sprintf("+%d", f.Line), tempPath}
+		}
+
+		c := exec.Command(editor, args...)
+		c.Stdin = os.Stdin
+		c.Stdout = os.Stdout
+		c.Stderr = os.Stderr
+
+		if err := c.Run(); err != nil {
+			return statusMsg(fmt.Sprintf("Editor error: %v", err))
+		}
+
+		// Clean up temp file after editor closes
+		os.RemoveAll(filepath.Dir(tempPath))
+
+		return statusMsg(fmt.Sprintf("Opened extracted file: %s", filepath.Base(tempPath)))
+	}
+}
+
 func (m Model) openEditor() tea.Cmd {
 	f := m.getSelectedFinding()
 	if f == nil {
@@ -39,10 +365,8 @@ func (m Model) openEditor() tea.Cmd {
 
 	// Check for virtual path (inside archive/container)
 	if isVirtualPath(f.Path) {
-		archive, internal := parseVirtualPath(f.Path)
-		return func() tea.Msg {
-			return statusMsg(fmt.Sprintf("Cannot open virtual file: %s is inside %s", internal, archive))
-		}
+		// Extract to temp and open
+		return m.openVirtualFile(f)
 	}
 
 	editor := os.Getenv("EDITOR")

@@ -2,13 +2,19 @@ package tui
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/alecthomas/chroma/v2"
+	"github.com/alecthomas/chroma/v2/formatters"
+	"github.com/alecthomas/chroma/v2/lexers"
+	"github.com/alecthomas/chroma/v2/styles"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -922,6 +928,94 @@ func parseUnixTimestamp(s string) (time.Time, error) {
 	return time.Unix(ts, 0), nil
 }
 
+// highlightCode applies syntax highlighting to code based on file extension
+// Returns the original code if highlighting fails
+func highlightCode(code string, filename string) string {
+	// Get lexer based on filename
+	lexer := lexers.Match(filename)
+	if lexer == nil {
+		// Try to match by extension for virtual paths
+		ext := filepath.Ext(filename)
+		if ext != "" {
+			lexer = lexers.Match("file" + ext)
+		}
+	}
+	if lexer == nil {
+		lexer = lexers.Fallback
+	}
+
+	// Coalesce runs of identical token types for cleaner output
+	lexer = chroma.Coalesce(lexer)
+
+	// Use a terminal-friendly style
+	style := styles.Get("monokai")
+	if style == nil {
+		style = styles.Fallback
+	}
+
+	// Use terminal256 formatter for ANSI colors
+	formatter := formatters.Get("terminal256")
+	if formatter == nil {
+		formatter = formatters.Fallback
+	}
+
+	// Tokenize and format
+	iterator, err := lexer.Tokenise(nil, code)
+	if err != nil {
+		return code
+	}
+
+	var buf bytes.Buffer
+	err = formatter.Format(&buf, style, iterator)
+	if err != nil {
+		return code
+	}
+
+	return buf.String()
+}
+
+// highlightLine applies syntax highlighting to a single line of code
+func highlightLine(line string, filename string) string {
+	// Get lexer based on filename
+	lexer := lexers.Match(filename)
+	if lexer == nil {
+		ext := filepath.Ext(filename)
+		if ext != "" {
+			lexer = lexers.Match("file" + ext)
+		}
+	}
+	if lexer == nil {
+		return line // No highlighting for unknown file types
+	}
+
+	lexer = chroma.Coalesce(lexer)
+
+	style := styles.Get("monokai")
+	if style == nil {
+		style = styles.Fallback
+	}
+
+	formatter := formatters.Get("terminal256")
+	if formatter == nil {
+		return line
+	}
+
+	iterator, err := lexer.Tokenise(nil, line)
+	if err != nil {
+		return line
+	}
+
+	var buf bytes.Buffer
+	if err := formatter.Format(&buf, style, iterator); err != nil {
+		return line
+	}
+
+	// Remove trailing newline that chroma might add
+	result := buf.String()
+	result = strings.TrimSuffix(result, "\n")
+	return result
+}
+
 // toggleSelection toggles selection on the currently displayed finding
 func (m *Model) toggleSelection() {
 	idx := m.table.Cursor()
@@ -1124,23 +1218,36 @@ func (m *Model) updateViewportContentForFinding(f types.Finding) {
 	// Try to read expanded context from file
 	lines, startLine, err := readFileContext(f.Path, f.Line, m.contextLines)
 	if err == nil && len(lines) > 0 {
-		// Render context with line numbers
+		// Render context with line numbers and syntax highlighting
 		lineNumStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 		highlightLineStyle := lipgloss.NewStyle().Background(lipgloss.Color("236"))
+
+		// Get the filename for syntax highlighting (handle virtual paths)
+		filename := f.Path
+		if strings.Contains(filename, "::") {
+			// Extract the actual filename from virtual path
+			parts := strings.Split(filename, "::")
+			filename = parts[len(parts)-1]
+		}
 
 		for i, line := range lines {
 			lineNum := startLine + i
 			lineNumStr := lineNumStyle.Render(fmt.Sprintf("%4d ", lineNum))
 
+			// Apply syntax highlighting to the line
+			highlightedLine := highlightLine(line, filename)
+
 			// Highlight the line containing the finding
 			if lineNum == f.Line {
-				// Highlight the match within the line
+				// For the finding line, we need to highlight the match specially
+				// Apply match highlighting on top of syntax highlighting
 				if f.Match != "" {
-					line = strings.ReplaceAll(line, f.Match, matchStyle.Render(f.Match))
+					// Use a distinctive style for the match that stands out
+					highlightedLine = strings.ReplaceAll(highlightedLine, f.Match, matchStyle.Render(f.Match))
 				}
-				b.WriteString(lineNumStr + highlightLineStyle.Render(line) + "\n")
+				b.WriteString(lineNumStr + highlightLineStyle.Render(highlightedLine) + "\n")
 			} else {
-				b.WriteString(lineNumStr + line + "\n")
+				b.WriteString(lineNumStr + highlightedLine + "\n")
 			}
 		}
 	} else {
@@ -1149,6 +1256,14 @@ func (m *Model) updateViewportContentForFinding(f types.Finding) {
 		if context == "" {
 			context = f.Match // Fallback to match if no context
 		}
+
+		// Apply syntax highlighting to fallback context
+		filename := f.Path
+		if strings.Contains(filename, "::") {
+			parts := strings.Split(filename, "::")
+			filename = parts[len(parts)-1]
+		}
+		context = highlightCode(context, filename)
 
 		// Highlight the matched string within the context
 		if f.Match != "" {
