@@ -1103,12 +1103,12 @@ func (m *Model) updateViewportContentForFinding(f types.Finding) {
 		}
 	}
 
-	// Git blame info (only for non-virtual files)
+	// Git commit info (only for non-virtual files)
 	if !isVirtual {
 		if blame := getGitBlame(f.Path, f.Line); blame != nil {
-			blameStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("6")) // Cyan
-			blameText := fmt.Sprintf("%s by %s on %s", blame.Commit, blame.Author, blame.Date)
-			b.WriteString(fmt.Sprintf("%s %s\n", keyStyle.Render("Blame:"), blameStyle.Render(blameText)))
+			commitStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("6")) // Cyan
+			commitText := fmt.Sprintf("%s (%s, %s)", blame.Commit, blame.Author, blame.Date)
+			b.WriteString(fmt.Sprintf("%s %s\n", keyStyle.Render("Commit:"), commitStyle.Render(commitText)))
 		}
 	}
 

@@ -68,7 +68,7 @@ Shows new findings (red, +) and fixed findings (green, -) since last scan.
 | `+` / `=` | Show more context lines around finding |
 | `-` / `_` | Show fewer context lines around finding |
 
-Context view shows line numbers and highlights the finding line. Git blame info (author, commit, date) is displayed when available.
+Context view shows line numbers and highlights the finding line. Git commit info (hash, author, date) is displayed when available.
 
 ### Grouping
 | Key | Action |
