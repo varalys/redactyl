@@ -80,6 +80,13 @@ Context view shows line numbers and highlights the finding line. Git blame info 
 
 Groups show a count of findings and can be expanded/collapsed. Press `gf` or `gd` again to disable grouping.
 
+### Virtual File Handling
+For findings inside archives or containers (paths containing `::`):
+- Detail pane shows "VIRTUAL FILE" warning in yellow
+- Archive/Layer/File breakdown is displayed
+- Pressing `o` to open shows "Cannot open virtual file" message
+- Git blame is skipped for virtual files
+
 ### Scan History (press `a`)
 | Key | Action |
 |-----|--------|
@@ -105,11 +112,10 @@ Groups show a count of findings and can be expanded/collapsed. Press `gf` or `gd
 
 ## Planned Features (TODO)
 
-### Phase 12: Virtual File Handling
-- [ ] Detect virtual paths (e.g., `image.tar::layer::file`)
-- [ ] Extract to temp and open option
-- [ ] "Cannot open virtual file" graceful message
-- [ ] Show container/archive context in detail pane
+All phases complete! Future enhancements could include:
+- Extract virtual files to temp and open
+- Syntax highlighting in context preview
+- More export formats
 
 ---
 

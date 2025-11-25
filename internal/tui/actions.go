@@ -16,10 +16,33 @@ import (
 	"github.com/redactyl/redactyl/internal/types"
 )
 
+// isVirtualPath checks if a path is a virtual path (inside an archive/container)
+func isVirtualPath(path string) bool {
+	return strings.Contains(path, "::")
+}
+
+// parseVirtualPath extracts archive and internal path from a virtual path
+// e.g., "image.tar::layer123::config.yaml" -> ("image.tar", "layer123::config.yaml")
+func parseVirtualPath(path string) (archive string, internal string) {
+	idx := strings.Index(path, "::")
+	if idx == -1 {
+		return path, ""
+	}
+	return path[:idx], path[idx+2:]
+}
+
 func (m Model) openEditor() tea.Cmd {
 	f := m.getSelectedFinding()
 	if f == nil {
 		return nil
+	}
+
+	// Check for virtual path (inside archive/container)
+	if isVirtualPath(f.Path) {
+		archive, internal := parseVirtualPath(f.Path)
+		return func() tea.Msg {
+			return statusMsg(fmt.Sprintf("Cannot open virtual file: %s is inside %s", internal, archive))
+		}
 	}
 
 	editor := os.Getenv("EDITOR")
@@ -251,6 +274,20 @@ func (m Model) openAuditLog() tea.Cmd {
 
 func (m Model) getSelectedFinding() *types.Finding {
 	idx := m.table.Cursor()
+
+	// Handle grouped mode
+	if m.groupMode != GroupNone && len(m.groupedFindings) > 0 {
+		if idx >= 0 && idx < len(m.groupedFindings) {
+			item := m.groupedFindings[idx]
+			if item.IsGroup {
+				return nil // Group headers don't have a finding
+			}
+			return item.Finding
+		}
+		return nil
+	}
+
+	// Normal mode
 	displayFindings := m.getDisplayFindings()
 	if idx >= 0 && idx < len(displayFindings) {
 		// Return pointer to the actual finding (from filtered or all)

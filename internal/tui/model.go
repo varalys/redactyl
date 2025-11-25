@@ -1057,8 +1057,36 @@ func (m *Model) updateViewportContentForFinding(f types.Finding) {
 		b.WriteString("\n\n")
 	}
 
+	// Check for virtual path and show archive context
+	isVirtual := strings.Contains(f.Path, "::")
+	if isVirtual {
+		virtualStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("11")). // Yellow
+			Italic(true)
+		b.WriteString(virtualStyle.Render("VIRTUAL FILE: This finding is inside an archive/container."))
+		b.WriteString("\n")
+		b.WriteString(virtualStyle.Render("Press 'o' will not work - file cannot be opened directly."))
+		b.WriteString("\n\n")
+
+		// Parse and display archive context
+		parts := strings.Split(f.Path, "::")
+		if len(parts) >= 2 {
+			b.WriteString(fmt.Sprintf("%s %s\n", keyStyle.Render("Archive:"), parts[0]))
+			if len(parts) == 2 {
+				b.WriteString(fmt.Sprintf("%s %s\n", keyStyle.Render("File:"), parts[1]))
+			} else {
+				// Multiple layers (e.g., container::layer::file)
+				b.WriteString(fmt.Sprintf("%s %s\n", keyStyle.Render("Layer:"), parts[1]))
+				b.WriteString(fmt.Sprintf("%s %s\n", keyStyle.Render("File:"), strings.Join(parts[2:], "::")))
+			}
+		} else {
+			b.WriteString(fmt.Sprintf("%s %s\n", keyStyle.Render("Path:"), f.Path))
+		}
+	} else {
+		b.WriteString(fmt.Sprintf("%s %s\n", keyStyle.Render("Path:"), f.Path))
+	}
+
 	// Render finding details using keyStyle for labels
-	b.WriteString(fmt.Sprintf("%s %s\n", keyStyle.Render("Path:"), f.Path))
 	b.WriteString(fmt.Sprintf("%s %s\n", keyStyle.Render("Detector:"), f.Detector))
 	b.WriteString(fmt.Sprintf("%s %s\n", keyStyle.Render("Severity:"), f.Severity))
 	b.WriteString(fmt.Sprintf("%s %d\n", keyStyle.Render("Line:"), f.Line))
@@ -1075,11 +1103,13 @@ func (m *Model) updateViewportContentForFinding(f types.Finding) {
 		}
 	}
 
-	// Git blame info
-	if blame := getGitBlame(f.Path, f.Line); blame != nil {
-		blameStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("6")) // Cyan
-		blameText := fmt.Sprintf("%s by %s on %s", blame.Commit, blame.Author, blame.Date)
-		b.WriteString(fmt.Sprintf("%s %s\n", keyStyle.Render("Blame:"), blameStyle.Render(blameText)))
+	// Git blame info (only for non-virtual files)
+	if !isVirtual {
+		if blame := getGitBlame(f.Path, f.Line); blame != nil {
+			blameStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("6")) // Cyan
+			blameText := fmt.Sprintf("%s by %s on %s", blame.Commit, blame.Author, blame.Date)
+			b.WriteString(fmt.Sprintf("%s %s\n", keyStyle.Render("Blame:"), blameStyle.Render(blameText)))
+		}
 	}
 
 	// Context section header with expand/contract hint
