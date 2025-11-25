@@ -1,7 +1,10 @@
 package tui
 
 import (
+	"bufio"
 	"fmt"
+	"os"
+	"os/exec"
 	"sort"
 	"strings"
 	"time"
@@ -154,6 +157,9 @@ type Model struct {
 	diffNewFindings  []types.Finding   // Findings added since last scan
 	diffFixedFindings []types.Finding  // Findings removed since last scan
 	diffPrevTimestamp time.Time        // Timestamp of the previous scan
+
+	// Context expansion state
+	contextLines     int               // Number of lines to show around finding (default 3)
 }
 
 // SortColumn constants
@@ -241,6 +247,7 @@ func NewModel(findings []types.Finding, rescanFunc func() ([]types.Finding, erro
 		lastScanTime:     time.Now(),        // Set scan time to now
 		searchInput:      ti,
 		selectedFindings: make(map[int]bool),
+		contextLines:     3,                 // Default context lines around finding
 	}
 
 	if m.showEmpty {
@@ -596,6 +603,135 @@ func (m *Model) exitDiffMode() {
 	m.rebuildTableRows()
 }
 
+// expandContext increases the number of context lines shown
+func (m *Model) expandContext() {
+	if m.contextLines < 20 {
+		m.contextLines += 2
+		m.updateViewportContent()
+	}
+}
+
+// contractContext decreases the number of context lines shown
+func (m *Model) contractContext() {
+	if m.contextLines > 1 {
+		m.contextLines -= 2
+		if m.contextLines < 1 {
+			m.contextLines = 1
+		}
+		m.updateViewportContent()
+	}
+}
+
+// readFileContext reads lines from a file around the specified line number
+func readFileContext(path string, targetLine int, contextLines int) ([]string, int, error) {
+	// Check if this is a virtual path (contains ::)
+	if strings.Contains(path, "::") {
+		return nil, 0, fmt.Errorf("virtual path")
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer f.Close()
+
+	startLine := targetLine - contextLines
+	if startLine < 1 {
+		startLine = 1
+	}
+	endLine := targetLine + contextLines
+
+	var lines []string
+	scanner := bufio.NewScanner(f)
+	lineNum := 0
+	for scanner.Scan() {
+		lineNum++
+		if lineNum >= startLine && lineNum <= endLine {
+			lines = append(lines, scanner.Text())
+		}
+		if lineNum > endLine {
+			break
+		}
+	}
+
+	return lines, startLine, scanner.Err()
+}
+
+// BlameInfo holds git blame information for a line
+type BlameInfo struct {
+	Author string
+	Date   string
+	Commit string
+}
+
+// getGitBlame gets blame info for a specific line in a file
+func getGitBlame(path string, line int) *BlameInfo {
+	// Check if this is a virtual path
+	if strings.Contains(path, "::") {
+		return nil
+	}
+
+	// Run git blame for just the specific line
+	// -L specifies line range, -p for porcelain format
+	cmd := fmt.Sprintf("git blame -L %d,%d --porcelain -- %q 2>/dev/null", line, line, path)
+	out, err := runCommand(cmd)
+	if err != nil || out == "" {
+		return nil
+	}
+
+	// Parse porcelain format
+	lines := strings.Split(out, "\n")
+	if len(lines) < 2 {
+		return nil
+	}
+
+	info := &BlameInfo{}
+
+	// First line has commit hash
+	parts := strings.Fields(lines[0])
+	if len(parts) > 0 {
+		info.Commit = parts[0][:8] // Short hash
+	}
+
+	// Parse the rest for author and date
+	for _, line := range lines {
+		if strings.HasPrefix(line, "author ") {
+			info.Author = strings.TrimPrefix(line, "author ")
+		} else if strings.HasPrefix(line, "author-time ") {
+			// Unix timestamp
+			timeStr := strings.TrimPrefix(line, "author-time ")
+			if ts, err := parseUnixTimestamp(timeStr); err == nil {
+				info.Date = ts.Format("2006-01-02")
+			}
+		}
+	}
+
+	return info
+}
+
+// runCommand executes a shell command and returns the output
+func runCommand(cmd string) (string, error) {
+	out, err := execCommand("sh", "-c", cmd)
+	if err != nil {
+		return "", err
+	}
+	return string(out), nil
+}
+
+// execCommand is a wrapper around os/exec for testing
+var execCommand = func(name string, args ...string) ([]byte, error) {
+	return exec.Command(name, args...).Output()
+}
+
+// parseUnixTimestamp parses a unix timestamp string
+func parseUnixTimestamp(s string) (time.Time, error) {
+	var ts int64
+	if _, err := fmt.Sscanf(s, "%d", &ts); err != nil {
+		return time.Time{}, err
+	}
+	return time.Unix(ts, 0), nil
+}
+
 // toggleSelection toggles selection on the currently displayed finding
 func (m *Model) toggleSelection() {
 	idx := m.table.Cursor()
@@ -704,18 +840,54 @@ func (m *Model) updateViewportContent() {
 			}
 		}
 
-		b.WriteString(fmt.Sprintf("\n%s\n", keyStyle.Render("Context:")))
-
-		context := f.Context
-		if context == "" {
-			context = f.Match // Fallback to match if no context
+		// Git blame info
+		if blame := getGitBlame(f.Path, f.Line); blame != nil {
+			blameStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("6")) // Cyan
+			blameText := fmt.Sprintf("%s by %s on %s", blame.Commit, blame.Author, blame.Date)
+			b.WriteString(fmt.Sprintf("%s %s\n", keyStyle.Render("Blame:"), blameStyle.Render(blameText)))
 		}
 
-		// Highlight the matched string within the context
-		if f.Match != "" {
-			context = strings.ReplaceAll(context, f.Match, matchStyle.Render(f.Match))
+		// Context section header with expand/contract hint
+		contextHint := fmt.Sprintf(" (+/- to expand/contract, showing %d lines)", m.contextLines*2+1)
+		b.WriteString(fmt.Sprintf("\n%s%s\n",
+			keyStyle.Render("Context:"),
+			lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render(contextHint)))
+
+		// Try to read expanded context from file
+		lines, startLine, err := readFileContext(f.Path, f.Line, m.contextLines)
+		if err == nil && len(lines) > 0 {
+			// Render context with line numbers
+			lineNumStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+			highlightLineStyle := lipgloss.NewStyle().Background(lipgloss.Color("236"))
+
+			for i, line := range lines {
+				lineNum := startLine + i
+				lineNumStr := lineNumStyle.Render(fmt.Sprintf("%4d ", lineNum))
+
+				// Highlight the line containing the finding
+				if lineNum == f.Line {
+					// Highlight the match within the line
+					if f.Match != "" {
+						line = strings.ReplaceAll(line, f.Match, matchStyle.Render(f.Match))
+					}
+					b.WriteString(lineNumStr + highlightLineStyle.Render(line) + "\n")
+				} else {
+					b.WriteString(lineNumStr + line + "\n")
+				}
+			}
+		} else {
+			// Fallback to original context or match
+			context := f.Context
+			if context == "" {
+				context = f.Match // Fallback to match if no context
+			}
+
+			// Highlight the matched string within the context
+			if f.Match != "" {
+				context = strings.ReplaceAll(context, f.Match, matchStyle.Render(f.Match))
+			}
+			b.WriteString(context)
 		}
-		b.WriteString(context)
 
 		m.viewport.SetContent(b.String())
 	}
@@ -1011,6 +1183,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "e": // Export menu
 			if len(m.getDisplayFindings()) > 0 {
 				m.showExportMenu = true
+				return m, nil
+			}
+		case "+", "=": // Expand context (= is unshifted + on most keyboards)
+			if !m.showEmpty {
+				m.expandContext()
+				timeout := time.Now().Add(2 * time.Second)
+				m.statusTimeout = &timeout
+				m.statusMessage = fmt.Sprintf("Context: %d lines", m.contextLines*2+1)
+				return m, nil
+			}
+		case "-", "_": // Contract context
+			if !m.showEmpty {
+				m.contractContext()
+				timeout := time.Now().Add(2 * time.Second)
+				m.statusTimeout = &timeout
+				m.statusMessage = fmt.Sprintf("Context: %d lines", m.contextLines*2+1)
 				return m, nil
 			}
 		case "y": // Copy path to clipboard
@@ -1523,6 +1711,11 @@ func (m Model) View() string {
 		lines = append(lines, sectionStyle.Render("Export & Copy"))
 		lines = append(lines, formatRow("e", "Export (JSON/CSV/SARIF)"))
 		lines = append(lines, formatRow("y / Y", "Copy path / full finding"))
+		lines = append(lines, "")
+
+		// Context
+		lines = append(lines, sectionStyle.Render("Context"))
+		lines = append(lines, formatRow("+ / -", "Expand / contract context"))
 		lines = append(lines, "")
 
 		// Actions

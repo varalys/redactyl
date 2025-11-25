@@ -62,6 +62,14 @@ Interactive Terminal User Interface for reviewing, filtering, and remediating sc
 
 Shows new findings (red, +) and fixed findings (green, -) since last scan.
 
+### Context Expansion
+| Key | Action |
+|-----|--------|
+| `+` / `=` | Show more context lines around finding |
+| `-` / `_` | Show fewer context lines around finding |
+
+Context view shows line numbers and highlights the finding line. Git blame info (author, commit, date) is displayed when available.
+
 ### Scan History (press `a`)
 | Key | Action |
 |-----|--------|
@@ -86,11 +94,6 @@ Shows new findings (red, +) and fixed findings (green, -) since last scan.
 ---
 
 ## Planned Features (TODO)
-
-### Phase 10: Enhanced Context
-- [ ] **Expand Context** (`+`/`-`): Show more/fewer lines around finding
-- [ ] Syntax highlighting in context preview
-- [ ] Git blame info (author, commit) for findings
 
 ### Phase 11: Grouping
 - [ ] **Group by File** (`gf`): Collapse findings by file path
