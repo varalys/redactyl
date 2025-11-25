@@ -112,7 +112,6 @@ For findings inside archives or containers (paths containing `::`):
 
 ## Planned Features (TODO)
 
-All phases complete! Future enhancements could include:
 - Extract virtual files to temp and open
 - Syntax highlighting in context preview
 - More export formats
