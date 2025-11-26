@@ -45,27 +45,21 @@ func extractVirtualFile(virtualPath string) (string, error) {
 		return "", fmt.Errorf("not a virtual path: %s", virtualPath)
 	}
 
-	// Create temp directory for extracted files
 	tempDir, err := os.MkdirTemp("", "redactyl-extract-*")
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp dir: %w", err)
 	}
 
-	// Determine the final filename (last part of internal path)
 	parts := strings.Split(internal, "::")
 	filename := parts[len(parts)-1]
-
-	// Create the output file path
 	outputPath := filepath.Join(tempDir, filename)
 
-	// Extract based on archive type
 	content, err := extractFromArchive(archive, internal)
 	if err != nil {
 		_ = os.RemoveAll(tempDir) // Best effort cleanup
 		return "", err
 	}
 
-	// Write to temp file
 	if err := os.WriteFile(outputPath, content, 0600); err != nil {
 		_ = os.RemoveAll(tempDir) // Best effort cleanup
 		return "", fmt.Errorf("failed to write temp file: %w", err)
@@ -103,9 +97,7 @@ func extractFromZip(archivePath string, internalPath string) ([]byte, error) {
 	}
 	defer func() { _ = r.Close() }()
 
-	// If there's nesting, we need to find the nested archive first
 	if len(parts) > 1 {
-		// Find the first nested archive
 		nestedArchive := parts[0]
 		for _, f := range r.File {
 			if f.Name == nestedArchive || strings.HasSuffix(f.Name, "/"+nestedArchive) {
@@ -118,7 +110,6 @@ func extractFromZip(archivePath string, internalPath string) ([]byte, error) {
 				if err != nil {
 					return nil, err
 				}
-				// Recursively extract from nested archive
 				remainingPath := strings.Join(parts[1:], "::")
 				return extractFromNestedArchive(nestedArchive, content, remainingPath)
 			}
@@ -248,7 +239,6 @@ func extractFromNestedArchive(archiveName string, content []byte, internalPath s
 		targetFile := parts[len(parts)-1]
 
 		if len(parts) > 1 {
-			// More nesting
 			nestedArchive := parts[0]
 			for _, f := range r.File {
 				if f.Name == nestedArchive || strings.HasSuffix(f.Name, "/"+nestedArchive) {
@@ -313,7 +303,6 @@ func (m Model) openVirtualFile(f *types.Finding) tea.Cmd {
 			editor = "vim"
 		}
 
-		// Build args based on editor type
 		var args []string
 		editorBase := editor
 		if idx := strings.LastIndex(editor, "/"); idx != -1 {
@@ -363,51 +352,39 @@ func (m Model) openEditor() tea.Cmd {
 		return nil
 	}
 
-	// Check for virtual path (inside archive/container)
 	if isVirtualPath(f.Path) {
-		// Extract to temp and open
 		return m.openVirtualFile(f)
 	}
 
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
-		editor = "vim" // Default to vim
+		editor = "vim"
 	}
 
-	// Build args based on editor type
 	var args []string
 	editorBase := editor
-	// Extract just the editor name (handle paths like /usr/bin/vim)
 	if idx := strings.LastIndex(editor, "/"); idx != -1 {
 		editorBase = editor[idx+1:]
 	}
 
 	switch editorBase {
 	case "code", "code-insiders":
-		// VS Code: code -g file:line:column
 		args = []string{"-g", fmt.Sprintf("%s:%d:%d", f.Path, f.Line, f.Column)}
 	case "subl", "sublime", "sublime_text":
-		// Sublime: subl file:line:column
 		args = []string{fmt.Sprintf("%s:%d:%d", f.Path, f.Line, f.Column)}
 	case "atom":
-		// Atom: atom file:line:column
 		args = []string{fmt.Sprintf("%s:%d:%d", f.Path, f.Line, f.Column)}
 	case "emacs", "emacsclient":
-		// Emacs: emacs +line:column file
 		args = []string{fmt.Sprintf("+%d:%d", f.Line, f.Column), f.Path}
 	case "nano":
-		// Nano: nano +line,column file
 		args = []string{fmt.Sprintf("+%d,%d", f.Line, f.Column), f.Path}
 	case "vi", "vim", "nvim":
-		// Vim/Neovim: vim +line file (then :column on open)
-		// We use +line and normal mode command to jump to column
 		if f.Column > 0 {
 			args = []string{fmt.Sprintf("+call cursor(%d,%d)", f.Line, f.Column), f.Path}
 		} else {
 			args = []string{fmt.Sprintf("+%d", f.Line), f.Path}
 		}
 	default:
-		// Generic fallback: try vim-style +line
 		args = []string{fmt.Sprintf("+%d", f.Line), f.Path}
 	}
 
@@ -426,7 +403,6 @@ func (m Model) ignoreFile() tea.Cmd {
 		return nil
 	}
 
-	// Append to .redactylignore
 	file, err := os.OpenFile(".redactylignore", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return func() tea.Msg { return statusMsg(fmt.Sprintf("Error opening .redactylignore: %v", err)) }
@@ -446,13 +422,11 @@ func (m Model) unignoreFile() tea.Cmd {
 		return nil
 	}
 
-	// Read current .redactylignore
 	content, err := os.ReadFile(".redactylignore")
 	if err != nil {
 		return func() tea.Msg { return statusMsg("No .redactylignore file found") }
 	}
 
-	// Split into lines and filter out the path
 	lines := strings.Split(string(content), "\n")
 	var newLines []string
 	found := false
@@ -460,7 +434,7 @@ func (m Model) unignoreFile() tea.Cmd {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == f.Path || trimmed == f.Path+"/**" {
 			found = true
-			continue // Skip this line
+			continue
 		}
 		newLines = append(newLines, line)
 	}
@@ -469,10 +443,8 @@ func (m Model) unignoreFile() tea.Cmd {
 		return func() tea.Msg { return statusMsg(fmt.Sprintf("%s is not in .redactylignore", f.Path)) }
 	}
 
-	// Write back
 	newContent := strings.Join(newLines, "\n")
-	// Clean up trailing newlines but ensure file ends with one
-	newContent = strings.TrimRight(newContent, "\n") + "\n"
+	newContent = strings.TrimRight(newContent, "\n") + "\n" // Ensure file ends with newline
 	if newContent == "\n" {
 		newContent = ""
 	}
@@ -490,20 +462,15 @@ func (m Model) addToBaseline() tea.Cmd {
 		return nil
 	}
 
-	// Load existing baseline
 	base, err := report.LoadBaseline("redactyl.baseline.json")
 	if err != nil {
-		// If error, maybe it doesn't exist, create new
 		base = report.Baseline{Items: map[string]bool{}}
 	}
 
-	// Add key
 	key := f.Path + "|" + f.Detector + "|" + f.Match
 	base.Items[key] = true
 
-	// Save
-	// We can't use report.SaveBaseline because it takes []Finding and regenerates.
-	// We need to serialize 'base' manually.
+	// Serialize manually since report.SaveBaseline regenerates from []Finding
 	buf, err := json.MarshalIndent(base, "", "  ")
 	if err != nil {
 		return func() tea.Msg { return statusMsg(fmt.Sprintf("Error marshaling baseline: %v", err)) }
@@ -522,22 +489,18 @@ func (m *Model) removeFromBaseline() tea.Cmd {
 		return nil
 	}
 
-	// Check if finding is baselined
 	key := f.Path + "|" + f.Detector + "|" + f.Match
 	if !m.baselinedSet[key] {
 		return func() tea.Msg { return statusMsg("Finding is not baselined") }
 	}
 
-	// Load existing baseline
 	base, err := report.LoadBaseline("redactyl.baseline.json")
 	if err != nil {
 		return func() tea.Msg { return statusMsg(fmt.Sprintf("Error loading baseline: %v", err)) }
 	}
 
-	// Remove key
 	delete(base.Items, key)
 
-	// Save
 	buf, err := json.MarshalIndent(base, "", "  ")
 	if err != nil {
 		return func() tea.Msg { return statusMsg(fmt.Sprintf("Error marshaling baseline: %v", err)) }
@@ -547,10 +510,9 @@ func (m *Model) removeFromBaseline() tea.Cmd {
 		return func() tea.Msg { return statusMsg(fmt.Sprintf("Error writing baseline: %v", err)) }
 	}
 
-	// Update local baselinedSet
 	delete(m.baselinedSet, key)
 
-	// Rebuild table row for this finding (remove the (b) prefix)
+	// Update table row to remove baseline marker
 	idx := m.table.Cursor()
 	rows := m.table.Rows()
 	if idx >= 0 && idx < len(rows) {
@@ -564,40 +526,35 @@ func (m *Model) removeFromBaseline() tea.Cmd {
 func (m Model) getSelectedFinding() *types.Finding {
 	idx := m.table.Cursor()
 
-	// Handle grouped mode
 	if m.groupMode != GroupNone && len(m.groupedFindings) > 0 {
 		if idx >= 0 && idx < len(m.groupedFindings) {
 			item := m.groupedFindings[idx]
 			if item.IsGroup {
-				return nil // Group headers don't have a finding
+				return nil
 			}
 			return item.Finding
 		}
 		return nil
 	}
 
-	// Normal mode
 	displayFindings := m.getDisplayFindings()
 	if idx >= 0 && idx < len(displayFindings) {
-		// Return pointer to the actual finding (from filtered or all)
 		return &displayFindings[idx]
 	}
 	return nil
 }
 
-// bulkBaseline adds all selected findings to baseline
+// bulkBaseline adds all selected findings to baseline.
 func (m *Model) bulkBaseline() tea.Cmd {
 	if len(m.selectedFindings) == 0 {
 		return func() tea.Msg { return statusMsg("No findings selected") }
 	}
 
-	// Load existing baseline
 	base, err := report.LoadBaseline("redactyl.baseline.json")
 	if err != nil {
 		base = report.Baseline{Items: map[string]bool{}}
 	}
 
-	// Add all selected findings
 	count := 0
 	for origIdx := range m.selectedFindings {
 		if origIdx >= 0 && origIdx < len(m.findings) {
@@ -610,7 +567,6 @@ func (m *Model) bulkBaseline() tea.Cmd {
 		}
 	}
 
-	// Save baseline
 	buf, err := json.MarshalIndent(base, "", "  ")
 	if err != nil {
 		return func() tea.Msg { return statusMsg(fmt.Sprintf("Error marshaling baseline: %v", err)) }
@@ -620,19 +576,16 @@ func (m *Model) bulkBaseline() tea.Cmd {
 		return func() tea.Msg { return statusMsg(fmt.Sprintf("Error writing baseline: %v", err)) }
 	}
 
-	// Clear selection after bulk operation
 	m.selectedFindings = make(map[int]bool)
-
 	return func() tea.Msg { return statusMsg(fmt.Sprintf("Added %d findings to baseline", count)) }
 }
 
-// bulkIgnore adds all unique files from selected findings to .redactylignore
+// bulkIgnore adds all unique files from selected findings to .redactylignore.
 func (m *Model) bulkIgnore() tea.Cmd {
 	if len(m.selectedFindings) == 0 {
 		return func() tea.Msg { return statusMsg("No findings selected") }
 	}
 
-	// Collect unique file paths
 	paths := make(map[string]bool)
 	for origIdx := range m.selectedFindings {
 		if origIdx >= 0 && origIdx < len(m.findings) {
@@ -640,7 +593,6 @@ func (m *Model) bulkIgnore() tea.Cmd {
 		}
 	}
 
-	// Append to .redactylignore
 	file, err := os.OpenFile(".redactylignore", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return func() tea.Msg { return statusMsg(fmt.Sprintf("Error opening .redactylignore: %v", err)) }
@@ -653,13 +605,11 @@ func (m *Model) bulkIgnore() tea.Cmd {
 		}
 	}
 
-	// Clear selection after bulk operation
 	m.selectedFindings = make(map[int]bool)
-
 	return func() tea.Msg { return statusMsg(fmt.Sprintf("Added %d files to .redactylignore", len(paths))) }
 }
 
-// copyPathToClipboard copies the current finding's file path to clipboard
+// copyPathToClipboard copies the current finding's file path to clipboard.
 func (m Model) copyPathToClipboard() tea.Cmd {
 	f := m.getSelectedFinding()
 	if f == nil {
@@ -673,14 +623,13 @@ func (m Model) copyPathToClipboard() tea.Cmd {
 	return func() tea.Msg { return statusMsg(fmt.Sprintf("Copied: %s", f.Path)) }
 }
 
-// copyFindingToClipboard copies full finding details to clipboard
+// copyFindingToClipboard copies full finding details to clipboard.
 func (m Model) copyFindingToClipboard() tea.Cmd {
 	f := m.getSelectedFinding()
 	if f == nil {
 		return func() tea.Msg { return statusMsg("No finding selected") }
 	}
 
-	// Build detailed text representation
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("Path: %s\n", f.Path))
 	sb.WriteString(fmt.Sprintf("Line: %d\n", f.Line))
@@ -704,14 +653,13 @@ func (m Model) copyFindingToClipboard() tea.Cmd {
 	return func() tea.Msg { return statusMsg("Copied finding details to clipboard") }
 }
 
-// exportFindings exports current view to a file
+// exportFindings exports current view to a file.
 func (m *Model) exportFindings(format string) tea.Cmd {
 	displayFindings := m.getDisplayFindings()
 	if len(displayFindings) == 0 {
 		return func() tea.Msg { return statusMsg("No findings to export") }
 	}
 
-	// Generate filename with timestamp
 	timestamp := time.Now().Format("20060102-150405")
 	var filename string
 	var data []byte
@@ -735,7 +683,6 @@ func (m *Model) exportFindings(format string) tea.Cmd {
 		return func() tea.Msg { return statusMsg(fmt.Sprintf("Export error: %v", err)) }
 	}
 
-	// Write to current directory
 	if err := os.WriteFile(filename, data, 0644); err != nil {
 		return func() tea.Msg { return statusMsg(fmt.Sprintf("Write error: %v", err)) }
 	}
@@ -746,17 +693,15 @@ func (m *Model) exportFindings(format string) tea.Cmd {
 	}
 }
 
-// findingsToCSV converts findings to CSV format
+// findingsToCSV converts findings to CSV format.
 func (m *Model) findingsToCSV(findings []types.Finding) ([]byte, error) {
 	var sb strings.Builder
 	writer := csv.NewWriter(&sb)
 
-	// Header
 	if err := writer.Write([]string{"Severity", "Detector", "Path", "Line", "Column", "Match", "Secret"}); err != nil {
 		return nil, err
 	}
 
-	// Rows
 	for _, f := range findings {
 		row := []string{
 			string(f.Severity),
@@ -776,9 +721,8 @@ func (m *Model) findingsToCSV(findings []types.Finding) ([]byte, error) {
 	return []byte(sb.String()), writer.Error()
 }
 
-// findingsToSARIF converts findings to SARIF 2.1.0 format
+// findingsToSARIF converts findings to SARIF 2.1.0 format.
 func (m *Model) findingsToSARIF(findings []types.Finding) ([]byte, error) {
-	// Simplified SARIF structure
 	type sarifLocation struct {
 		PhysicalLocation struct {
 			ArtifactLocation struct {
@@ -814,7 +758,6 @@ func (m *Model) findingsToSARIF(findings []types.Finding) ([]byte, error) {
 		Runs    []sarifRun `json:"runs"`
 	}
 
-	// Build results
 	results := make([]sarifResult, len(findings))
 	for i, f := range findings {
 		level := "warning"
