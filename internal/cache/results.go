@@ -9,7 +9,6 @@ import (
 	"github.com/redactyl/redactyl/internal/types"
 )
 
-// ScanResults stores the findings and metadata from a scan
 type ScanResults struct {
 	Findings  []types.Finding `json:"findings"`
 	Timestamp time.Time       `json:"timestamp"`
@@ -18,7 +17,6 @@ type ScanResults struct {
 }
 
 func resultsPath(root string) string {
-	// Store in .git directory or repo root
 	gitDir := filepath.Join(root, ".git")
 	if st, err := os.Stat(gitDir); err == nil && st.IsDir() {
 		return filepath.Join(gitDir, "redactyl_last_scan.json")
@@ -26,7 +24,6 @@ func resultsPath(root string) string {
 	return filepath.Join(root, ".redactyl_last_scan.json")
 }
 
-// SaveResults saves scan results to cache
 func SaveResults(root string, findings []types.Finding) error {
 	p := resultsPath(root)
 	results := ScanResults{
@@ -42,7 +39,6 @@ func SaveResults(root string, findings []types.Finding) error {
 	return os.WriteFile(p, b, 0644)
 }
 
-// LoadResults loads the last scan results from cache
 func LoadResults(root string) (ScanResults, error) {
 	var results ScanResults
 	p := resultsPath(root)
