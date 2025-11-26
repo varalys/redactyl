@@ -13,12 +13,12 @@ func TestView_Rendering(t *testing.T) {
 		{Path: "file1.go", Detector: "aws-key", Severity: types.SevHigh},
 		{Path: "file2.go", Detector: "generic", Severity: types.SevMed},
 	}
-	
+
 	m := NewModel(findings, nil)
 	m.ready = true
 	m.width = 100
 	m.height = 40
-	
+
 	// 1. Basic View
 	output := m.View()
 	if output == "" {
@@ -89,7 +89,7 @@ func TestFormatDuration_Coverage(t *testing.T) {
 		{2 * time.Hour, "2h"},
 		{48 * time.Hour, "2d"},
 	}
-	
+
 	for _, tt := range tests {
 		got := formatDuration(tt.d)
 		if got != tt.expected {
