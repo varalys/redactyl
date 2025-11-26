@@ -12,18 +12,18 @@ import (
 
 // ScanRecord represents a single scan event for audit purposes
 type ScanRecord struct {
-	Timestamp       time.Time         `json:"timestamp"`
-	ScanID          string            `json:"scan_id"` // Unique ID for this scan
-	Root            string            `json:"root"`
-	TotalFindings   int               `json:"total_findings"`
-	NewFindings     int               `json:"new_findings"`      // Findings not in baseline
-	BaselinedCount  int               `json:"baselined_count"`   // Findings in baseline
-	SeverityCounts  map[string]int    `json:"severity_counts"`   // High, medium, low counts
-	FilesScanned    int               `json:"files_scanned"`
-	Duration        string            `json:"duration"`
-	BaselineFile    string            `json:"baseline_file,omitempty"`
-	TopFindings     []FindingSummary  `json:"top_findings,omitempty"` // Sample of findings (max 10)
-	AllFindings     []types.Finding   `json:"all_findings,omitempty"` // Complete findings for historical viewing
+	Timestamp      time.Time        `json:"timestamp"`
+	ScanID         string           `json:"scan_id"` // Unique ID for this scan
+	Root           string           `json:"root"`
+	TotalFindings  int              `json:"total_findings"`
+	NewFindings    int              `json:"new_findings"`    // Findings not in baseline
+	BaselinedCount int              `json:"baselined_count"` // Findings in baseline
+	SeverityCounts map[string]int   `json:"severity_counts"` // High, medium, low counts
+	FilesScanned   int              `json:"files_scanned"`
+	Duration       string           `json:"duration"`
+	BaselineFile   string           `json:"baseline_file,omitempty"`
+	TopFindings    []FindingSummary `json:"top_findings,omitempty"` // Sample of findings (max 10)
+	AllFindings    []types.Finding  `json:"all_findings,omitempty"` // Complete findings for historical viewing
 }
 
 // FindingSummary is a simplified finding for audit logs

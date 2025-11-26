@@ -19,7 +19,7 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
-	"github.com/charmbracelet/bubbletea"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/redactyl/redactyl/internal/audit"
 	"github.com/redactyl/redactyl/internal/report"
@@ -102,13 +102,14 @@ func isBaselined(f types.Finding, baselinedSet map[string]bool) bool {
 
 // formatDuration formats a duration into human-readable string
 func formatDuration(d time.Duration) string {
-	if d < time.Minute {
+	switch {
+	case d < time.Minute:
 		return fmt.Sprintf("%ds", int(d.Seconds()))
-	} else if d < time.Hour {
+	case d < time.Hour:
 		return fmt.Sprintf("%dm", int(d.Minutes()))
-	} else if d < 24*time.Hour {
+	case d < 24*time.Hour:
 		return fmt.Sprintf("%dh", int(d.Hours()))
-	} else {
+	default:
 		return fmt.Sprintf("%dd", int(d.Hours()/24))
 	}
 }
@@ -774,13 +775,7 @@ func (m *Model) toggleGroupExpansion() {
 	}
 
 	item := m.groupedFindings[idx]
-	var groupKey string
-
-	if item.IsGroup {
-		groupKey = item.GroupKey
-	} else {
-		groupKey = item.GroupKey
-	}
+	groupKey := item.GroupKey
 
 	// Toggle expansion
 	m.expandedGroups[groupKey] = !m.expandedGroups[groupKey]
@@ -1561,23 +1556,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmd := m.bulkBaseline()
 				m.rebuildTableRows()
 				return m, cmd
-			} else {
-				timeout := time.Now().Add(2 * time.Second)
-				m.statusTimeout = &timeout
-				m.statusMessage = "No findings selected (press v to select)"
-				return m, nil
 			}
+			timeout := time.Now().Add(2 * time.Second)
+			m.statusTimeout = &timeout
+			m.statusMessage = "No findings selected (press v to select)"
+			return m, nil
 		case "ctrl+i": // Bulk ignore selected files
 			if len(m.selectedFindings) > 0 {
 				cmd := m.bulkIgnore()
 				m.rebuildTableRows()
 				return m, cmd
-			} else {
-				timeout := time.Now().Add(2 * time.Second)
-				m.statusTimeout = &timeout
-				m.statusMessage = "No findings selected (press v to select)"
-				return m, nil
 			}
+			timeout := time.Now().Add(2 * time.Second)
+			m.statusTimeout = &timeout
+			m.statusMessage = "No findings selected (press v to select)"
+			return m, nil
 		case "o", "enter":
 			if !m.showEmpty {
 				return m, m.openEditor()
@@ -1634,21 +1627,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.statusTimeout = &timeout
 				m.statusMessage = "Exited diff view"
 				return m, nil
-			} else {
-				if m.computeDiff() {
-					m.diffMode = true
-					timeout := time.Now().Add(5 * time.Second)
-					m.statusTimeout = &timeout
-					m.statusMessage = fmt.Sprintf("Diff: %d new, %d fixed since %s",
-						len(m.diffNewFindings), len(m.diffFixedFindings),
-						m.diffPrevTimestamp.Format("Jan 2, 15:04"))
-				} else {
-					timeout := time.Now().Add(3 * time.Second)
-					m.statusTimeout = &timeout
-					m.statusMessage = "Need at least 2 scans to show diff"
-				}
-				return m, nil
 			}
+			if m.computeDiff() {
+				m.diffMode = true
+				timeout := time.Now().Add(5 * time.Second)
+				m.statusTimeout = &timeout
+				m.statusMessage = fmt.Sprintf("Diff: %d new, %d fixed since %s",
+					len(m.diffNewFindings), len(m.diffFixedFindings),
+					m.diffPrevTimestamp.Format("Jan 2, 15:04"))
+			} else {
+				timeout := time.Now().Add(3 * time.Second)
+				m.statusTimeout = &timeout
+				m.statusMessage = "Need at least 2 scans to show diff"
+			}
+			return m, nil
 		case "tab": // Toggle group expansion
 			if m.groupMode != GroupNone {
 				m.toggleGroupExpansion()
@@ -1861,7 +1853,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Update table (for navigation not handled by custom keybindings)
 	if !m.quitting && !m.showEmpty {
-		if _, ok := msg.(tea.KeyMsg); !ok || (msg.(tea.KeyMsg).String() != "down" && msg.(tea.KeyMsg).String() != "j" && msg.(tea.KeyMsg).String() != "up" && msg.(tea.KeyMsg).String() != "k") {
+		shouldUpdate := true
+		if keyMsg, ok := msg.(tea.KeyMsg); ok {
+			key := keyMsg.String()
+			if key == "down" || key == "j" || key == "up" || key == "k" {
+				shouldUpdate = false
+			}
+		}
+		if shouldUpdate {
 			m.table, cmd = m.table.Update(msg)
 		}
 	}

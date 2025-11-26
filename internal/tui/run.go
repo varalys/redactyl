@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/charmbracelet/bubbletea"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/redactyl/redactyl/internal/report"
 	"github.com/redactyl/redactyl/internal/types"
 )

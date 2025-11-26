@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/atotto/clipboard"
-	"github.com/charmbracelet/bubbletea"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/redactyl/redactyl/internal/report"
 	"github.com/redactyl/redactyl/internal/types"
 )
@@ -61,13 +61,13 @@ func extractVirtualFile(virtualPath string) (string, error) {
 	// Extract based on archive type
 	content, err := extractFromArchive(archive, internal)
 	if err != nil {
-		os.RemoveAll(tempDir)
+		_ = os.RemoveAll(tempDir) // Best effort cleanup
 		return "", err
 	}
 
 	// Write to temp file
 	if err := os.WriteFile(outputPath, content, 0600); err != nil {
-		os.RemoveAll(tempDir)
+		_ = os.RemoveAll(tempDir) // Best effort cleanup
 		return "", fmt.Errorf("failed to write temp file: %w", err)
 	}
 
@@ -101,7 +101,7 @@ func extractFromZip(archivePath string, internalPath string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open zip: %w", err)
 	}
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 
 	// If there's nesting, we need to find the nested archive first
 	if len(parts) > 1 {
@@ -114,7 +114,7 @@ func extractFromZip(archivePath string, internalPath string) ([]byte, error) {
 					continue
 				}
 				content, err := io.ReadAll(rc)
-				rc.Close()
+				_ = rc.Close()
 				if err != nil {
 					return nil, err
 				}
@@ -133,7 +133,7 @@ func extractFromZip(archivePath string, internalPath string) ([]byte, error) {
 			if err != nil {
 				return nil, err
 			}
-			defer rc.Close()
+			defer func() { _ = rc.Close() }()
 			return io.ReadAll(rc)
 		}
 	}
@@ -146,7 +146,7 @@ func extractFromTar(archivePath string, internalPath string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open tar: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	return extractFromTarReader(tar.NewReader(f), internalPath)
 }
@@ -156,13 +156,13 @@ func extractFromTarGz(archivePath string, internalPath string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open tgz: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	gz, err := gzip.NewReader(f)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gzip reader: %w", err)
 	}
-	defer gz.Close()
+	defer func() { _ = gz.Close() }()
 
 	return extractFromTarReader(tar.NewReader(gz), internalPath)
 }
@@ -224,13 +224,13 @@ func extractFromGz(archivePath string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open gz: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	gz, err := gzip.NewReader(f)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gzip reader: %w", err)
 	}
-	defer gz.Close()
+	defer func() { _ = gz.Close() }()
 
 	return io.ReadAll(gz)
 }
@@ -257,7 +257,7 @@ func extractFromNestedArchive(archiveName string, content []byte, internalPath s
 						continue
 					}
 					nestedContent, err := io.ReadAll(rc)
-					rc.Close()
+					_ = rc.Close()
 					if err != nil {
 						return nil, err
 					}
@@ -274,7 +274,7 @@ func extractFromNestedArchive(archiveName string, content []byte, internalPath s
 				if err != nil {
 					return nil, err
 				}
-				defer rc.Close()
+				defer func() { _ = rc.Close() }()
 				return io.ReadAll(rc)
 			}
 		}
@@ -285,7 +285,7 @@ func extractFromNestedArchive(archiveName string, content []byte, internalPath s
 		if err != nil {
 			return nil, err
 		}
-		defer gz.Close()
+		defer func() { _ = gz.Close() }()
 		return extractFromTarReader(tar.NewReader(gz), internalPath)
 
 	case strings.HasSuffix(lower, ".tar"), strings.HasSuffix(lower, "layer.tar"):
@@ -351,7 +351,7 @@ func (m Model) openVirtualFile(f *types.Finding) tea.Cmd {
 		}
 
 		// Clean up temp file after editor closes
-		os.RemoveAll(filepath.Dir(tempPath))
+		_ = os.RemoveAll(filepath.Dir(tempPath))
 
 		return statusMsg(fmt.Sprintf("Opened extracted file: %s", filepath.Base(tempPath)))
 	}
@@ -431,7 +431,7 @@ func (m Model) ignoreFile() tea.Cmd {
 	if err != nil {
 		return func() tea.Msg { return statusMsg(fmt.Sprintf("Error opening .redactylignore: %v", err)) }
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	if _, err := file.WriteString(f.Path + "\n"); err != nil {
 		return func() tea.Msg { return statusMsg(fmt.Sprintf("Error writing to .redactylignore: %v", err)) }
@@ -506,7 +506,7 @@ func (m Model) addToBaseline() tea.Cmd {
 	// We need to serialize 'base' manually.
 	buf, err := json.MarshalIndent(base, "", "  ")
 	if err != nil {
-		return func() tea.Msg { return statusMsg(fmt.Sprintf("Error marshalling baseline: %v", err)) }
+		return func() tea.Msg { return statusMsg(fmt.Sprintf("Error marshaling baseline: %v", err)) }
 	}
 
 	if err := os.WriteFile("redactyl.baseline.json", buf, 0644); err != nil {
@@ -540,7 +540,7 @@ func (m *Model) removeFromBaseline() tea.Cmd {
 	// Save
 	buf, err := json.MarshalIndent(base, "", "  ")
 	if err != nil {
-		return func() tea.Msg { return statusMsg(fmt.Sprintf("Error marshalling baseline: %v", err)) }
+		return func() tea.Msg { return statusMsg(fmt.Sprintf("Error marshaling baseline: %v", err)) }
 	}
 
 	if err := os.WriteFile("redactyl.baseline.json", buf, 0644); err != nil {
@@ -559,41 +559,6 @@ func (m *Model) removeFromBaseline() tea.Cmd {
 	}
 
 	return func() tea.Msg { return statusMsg("Removed finding from baseline") }
-}
-
-func (m Model) openAuditLog() tea.Cmd {
-	editor := os.Getenv("EDITOR")
-	if editor == "" {
-		editor = "vim" // Default to vim
-	}
-
-	// Try to find audit log in .git directory first, then repo root
-	auditPaths := []string{
-		".git/redactyl_audit.jsonl",
-		".redactyl_audit.jsonl",
-	}
-
-	var auditPath string
-	for _, p := range auditPaths {
-		if _, err := os.Stat(p); err == nil {
-			auditPath = p
-			break
-		}
-	}
-
-	if auditPath == "" {
-		return func() tea.Msg {
-			return statusMsg("No audit log found - run a scan first")
-		}
-	}
-
-	c := exec.Command(editor, auditPath)
-	return tea.ExecProcess(c, func(err error) tea.Msg {
-		if err != nil {
-			return statusMsg(fmt.Sprintf("Error opening audit log: %v", err))
-		}
-		return statusMsg("Audit log viewer closed")
-	})
 }
 
 func (m Model) getSelectedFinding() *types.Finding {
@@ -618,11 +583,6 @@ func (m Model) getSelectedFinding() *types.Finding {
 		return &displayFindings[idx]
 	}
 	return nil
-}
-
-// getSelectedOriginalIndex returns the index in m.findings for the currently selected item
-func (m Model) getSelectedOriginalIndex() int {
-	return m.getOriginalIndex(m.table.Cursor())
 }
 
 // bulkBaseline adds all selected findings to baseline
@@ -653,7 +613,7 @@ func (m *Model) bulkBaseline() tea.Cmd {
 	// Save baseline
 	buf, err := json.MarshalIndent(base, "", "  ")
 	if err != nil {
-		return func() tea.Msg { return statusMsg(fmt.Sprintf("Error marshalling baseline: %v", err)) }
+		return func() tea.Msg { return statusMsg(fmt.Sprintf("Error marshaling baseline: %v", err)) }
 	}
 
 	if err := os.WriteFile("redactyl.baseline.json", buf, 0644); err != nil {
@@ -685,7 +645,7 @@ func (m *Model) bulkIgnore() tea.Cmd {
 	if err != nil {
 		return func() tea.Msg { return statusMsg(fmt.Sprintf("Error opening .redactylignore: %v", err)) }
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	for path := range paths {
 		if _, err := file.WriteString(path + "\n"); err != nil {

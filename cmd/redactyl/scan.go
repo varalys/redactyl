@@ -187,10 +187,7 @@ func runScan(cmd *cobra.Command, _ []string) error {
 		}
 
 		// Start TUI with ALL cached results (TUI will handle baseline display)
-		if err := tui.RunCachedWithBaseline(results.Findings, baseline, rescanFunc, results.Timestamp); err != nil {
-			return err
-		}
-		return nil
+		return tui.RunCachedWithBaseline(results.Findings, baseline, rescanFunc, results.Timestamp)
 	}
 
 	// Load configs: CLI > local > global

@@ -82,6 +82,18 @@ issues:
       linters: [errcheck]
     - text: "Error return value of `f\\.Close`"
       linters: [errcheck]
+    - text: "Error return value of `r\\.Close`"
+      linters: [errcheck]
+    - text: "Error return value of `rc\\.Close`"
+      linters: [errcheck]
+    - text: "Error return value of `gz\\.Close`"
+      linters: [errcheck]
+    - text: "Error return value of `file\\.Close`"
+      linters: [errcheck]
+    - text: "Error return value of `os\\.RemoveAll`"
+      linters: [errcheck]
+    - text: "Error return value of `.*\\.MarkDeprecated`"
+      linters: [errcheck]
     - text: "Error return value of `doublestar\\.Match`"
       linters: [errcheck]
     - text: "Error return value of `filepath\\.WalkDir`"
