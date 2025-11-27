@@ -8,6 +8,7 @@ This document explains how Redactyl scans archives, containers, Helm charts, Kub
 
 - **Archives:** `.zip`, `.tar`, `.tgz`, `.tar.gz`, `.gz` are scanned by streaming entries and emitting only text-like content. Nested archives are supported up to a configurable depth.
 - **Containers:** Tarballs produced by `docker save` (detected via `manifest.json` or `<layerID>/layer.tar`) are scanned. Supports both Docker and OCI image formats. Entries inside layer tarballs are represented using a virtual path: `image.tar::<layerID>/path/in/layer`.
+- **Registry Images:** Remote OCI images are scanned by streaming layers directly from the registry API. Virtual paths include the image reference and layer digest: `gcr.io/proj/img:tag::sha256:digest/path/in/layer`.
 - **Helm Charts:** Both packaged Helm charts (`.tgz` archives) and unpacked chart directories are scanned. Redactyl parses `Chart.yaml`, `values.yaml`, and all `templates/` files. Virtual paths show chart structure: `my-chart.tgz::templates/secret.yaml`.
 - **Kubernetes Manifests:** YAML files containing Kubernetes resources are auto-detected by structure and naming. Supports multi-document YAML files. Scans Secret objects, ConfigMaps, and container environment variables in Pods/Deployments.
 - **IaC hotspots:** Terraform state files (`*.tfstate`) and kubeconfigs are scanned with selective extraction of likely secret values when files are small; large files fall back to bounded text emission.
@@ -50,6 +51,9 @@ redactyl scan --helm
 
 # Scan Kubernetes manifests
 redactyl scan --k8s
+
+# Scan remote registry image
+redactyl scan --registry gcr.io/my-project/image:latest
 ```
 
 **Combined Scanning:**

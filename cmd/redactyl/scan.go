@@ -52,6 +52,8 @@ var (
 	flagJSONExtended bool
 	flagNoTUI        bool
 	flagViewLast     bool
+
+	flagRegistryImages []string
 )
 
 func init() {
@@ -90,6 +92,7 @@ func init() {
 	cmd.Flags().BoolVar(&flagIaC, "iac", false, "enable scanning IaC hotspots (tfstate, kubeconfigs)")
 	cmd.Flags().BoolVar(&flagHelm, "helm", false, "enable scanning Helm charts (.tgz archives and directories)")
 	cmd.Flags().BoolVar(&flagK8s, "k8s", false, "enable scanning Kubernetes manifests (YAML files)")
+	cmd.Flags().StringArrayVar(&flagRegistryImages, "registry", nil, "scan remote container registry image (e.g. gcr.io/project/image:tag)")
 	cmd.Flags().Int64Var(&flagMaxArchiveBytes, "max-archive-bytes", 32<<20, "max decompressed bytes per artifact before aborting")
 	cmd.Flags().IntVar(&flagMaxEntries, "max-entries", 1000, "max entries per archive/container before aborting")
 	cmd.Flags().IntVar(&flagMaxDepth, "max-depth", 2, "max recursion depth for nested archives")
@@ -209,6 +212,7 @@ func runScan(cmd *cobra.Command, _ []string) error {
 		ScanIaC:              pickBool(flagIaC, lcfg.IaC, gcfg.IaC),
 		ScanHelm:             pickBool(flagHelm, lcfg.Helm, gcfg.Helm),
 		ScanK8s:              pickBool(flagK8s, lcfg.K8s, gcfg.K8s),
+		RegistryImages:       flagRegistryImages,
 		MaxArchiveBytes:      pickInt64(flagMaxArchiveBytes, lcfg.MaxArchiveBytes, gcfg.MaxArchiveBytes),
 		MaxEntries:           pickInt(flagMaxEntries, lcfg.MaxEntries, gcfg.MaxEntries),
 		MaxDepth:             pickInt(flagMaxDepth, lcfg.MaxDepth, gcfg.MaxDepth),

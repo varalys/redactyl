@@ -28,6 +28,7 @@ Secrets don't just live in Git history - they hide in **container images, Helm c
 - [Performance](#performance)
 - [Configuration](#configuration)
 - [Deep scanning](#deep-scanning)
+- [Registry Scanning](#registry-scanning)
 - [How detection works](#how-detection-works)
 - [Filtering results](#filtering-results)
 - [Interactive TUI](#interactive-tui)
@@ -238,13 +239,46 @@ redactyl scan --helm
 # Scan Kubernetes manifests
 redactyl scan --k8s
 
-# Combine all artifact types with guardrails
+# Scan everything with guardrails
 redactyl scan --archives --containers --helm --k8s \
   --max-archive-bytes 67108864 \
   --max-depth 3 \
   --scan-time-budget 10s \
   --global-artifact-budget 30s
 ```
+
+## Registry Scanning
+
+Redactyl can scan remote container images directly from OCI-compliant registries (Docker Hub, GCR, ECR, ACR, etc.) without pulling them to disk.
+
+**Usage:**
+
+```sh
+# Scan public image
+redactyl scan --registry alpine:latest
+
+# Scan private image (Google Container Registry)
+redactyl scan --registry gcr.io/my-project/my-app:v1.0.0
+
+# Scan multiple images
+redactyl scan --registry image1:tag --registry image2:tag
+```
+
+**Authentication:**
+
+Redactyl automatically uses your local Docker credentials (from `~/.docker/config.json` or credential helpers). If you can run `docker pull`, you can run `redactyl scan --registry`.
+
+- **CI/CD:** Ensure `docker login` is run before the scan, or provide a config file with credentials.
+- **Cloud Providers:** Standard helpers (e.g., `docker-credential-gcr`, `docker-credential-ecr-login`) are supported.
+
+**How it works:**
+
+1. Fetches image manifest and metadata (lightweight).
+2. Streams image layers directly into memory.
+3. Scans file contents on-the-fly using Gitleaks.
+4. Reports findings with virtual paths: `registry.example.com/image:tag::sha256:layerhash/path/to/secret`.
+
+This approach is significantly faster and uses less disk space than pulling full images.
 
 ## Baseline
 

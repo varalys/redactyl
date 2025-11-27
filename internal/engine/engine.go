@@ -44,8 +44,9 @@ type Config struct {
 	ScanArchives         bool
 	ScanContainers       bool
 	ScanIaC              bool
-	ScanHelm             bool // Scan Helm charts
-	ScanK8s              bool // Scan Kubernetes manifests
+	ScanHelm             bool     // Scan Helm charts
+	ScanK8s              bool     // Scan Kubernetes manifests
+	RegistryImages       []string // Remote registry images to scan (e.g. gcr.io/proj/img:tag)
 	MaxArchiveBytes      int64
 	MaxEntries           int
 	MaxDepth             int
@@ -475,6 +476,13 @@ func scanArtifacts(cfg Config, scnr scanner.Scanner, emit func([]types.Finding),
 	if cfg.ScanK8s {
 		if err := artifacts.ScanK8sManifestsWithFilter(cfg.Root, lim, allowArtifact, emitArtifact); err != nil {
 			result.ArtifactErrors = append(result.ArtifactErrors, err)
+		}
+	}
+	if len(cfg.RegistryImages) > 0 {
+		for _, img := range cfg.RegistryImages {
+			if err := artifacts.ScanRegistryImage(img, lim, emitArtifact, &artStats); err != nil {
+				result.ArtifactErrors = append(result.ArtifactErrors, err)
+			}
 		}
 	}
 	flushArtifacts()
