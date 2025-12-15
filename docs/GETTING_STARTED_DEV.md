@@ -8,10 +8,9 @@
 
 ## Quick Context
 
-**Read this first:**
-- `/CLAUDE.md` - Strategic context, decisions, and project direction
-
 **TL;DR:** Redactyl is a specialized deep artifact scanner powered by Gitleaks. We scan container images, Helm charts, K8s manifests, and complex nested artifacts where traditional scanners can't reach.
+
+**Note:** AI context files (CLAUDE.md, AGENTS.md, etc.) are not included by default. If you use AI-assisted development, you'll need to generate your own context files.
 
 ---
 
@@ -96,7 +95,7 @@ redactyl/
 ├── pkg/core/             # Public Go API
 ├── docs/                 # Documentation
 │   └── deep-scanning.md        # Artifact scanning guide
-└── CLAUDE.md             # 🎯 Project context (read this!)
+└── test/                 # Test fixtures and integration tests
 ```
 
 ---
@@ -130,9 +129,6 @@ mkdir -p internal/registry
 touch internal/registry/client.go
 touch internal/registry/dockerhub.go
 touch internal/registry/gcr.go
-
-# Check CLAUDE.md for current priorities
-less CLAUDE.md
 ```
 
 **Key Technical Challenges:**
@@ -250,13 +246,12 @@ docker save alpine:latest > /tmp/alpine.tar
 ## Common Development Tasks
 
 ### Adding a New Feature
-1. Check `/CLAUDE.md` for current priorities
+1. Check GitHub issues for current priorities
 2. Create feature branch: `feature/short-description`
-3. Update `/CLAUDE.md` if it affects strategy
-4. Write tests first (TDD preferred)
-5. Implement feature
-6. Update documentation
-7. Open PR with clear description
+3. Write tests first (TDD preferred)
+4. Implement feature
+5. Update documentation
+6. Open PR with clear description
 
 ### Debugging
 ```bash
@@ -339,7 +334,7 @@ assert.Equal(t, expected, actual)
 
 ### Doc Locations
 - User-facing: `README.md`, `docs/*.md`
-- Developer-facing: `CLAUDE.md`, `CONTRIBUTING.md`, inline code comments
+- Developer-facing: `CONTRIBUTING.md`, inline code comments
 - API: `pkg/core/` (godoc comments)
 
 ---
@@ -439,7 +434,6 @@ go version  # Should be 1.25+
 ## Resources
 
 ### Internal Docs
-- `/CLAUDE.md` - Project strategy and context
 - `/docs/deep-scanning.md` - Artifact scanning guide
 
 ### External References
@@ -457,10 +451,9 @@ go version  # Should be 1.25+
 
 ## Next Steps
 
-1. **Read strategic context:** `/CLAUDE.md`
-2. **Set up environment:** Install Go 1.25+, Gitleaks, build project
-3. **Pick an issue:** Check GitHub issues for good first issues
-4. **Ask questions:** Open GitHub discussion or check existing docs
+1. **Set up environment:** Install Go 1.25+, Gitleaks, build project
+2. **Pick an issue:** Check GitHub issues for good first issues
+3. **Ask questions:** Open GitHub discussion or check existing docs
 
 **Ready to start?**
 ```bash
