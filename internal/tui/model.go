@@ -156,11 +156,18 @@ type Model struct {
 	// Context expansion state
 	contextLines int // Number of lines to show around finding (default 3)
 
+	// Secret visibility state
+	hideSecrets bool // When true, redact secret values in display (default true)
+
 	// Grouping state
 	groupMode       string          // "none", "file", "detector"
 	expandedGroups  map[string]bool // Set of expanded group keys
 	groupedFindings []GroupedItem   // Flattened list for display (groups + findings)
 	pendingKey      string          // For multi-key sequences like "gf", "gd"
+
+	// Clear history confirmation state
+	showClearConfirm  bool // True when first confirmation is shown
+	clearConfirmStage int  // 0=none, 1=first confirm, 2=second confirm
 }
 
 // GroupedItem represents either a group header or a finding in the grouped view
@@ -188,6 +195,9 @@ const (
 
 // NewModel initializes a new TUI model.
 func NewModel(findings []types.Finding, rescanFunc func() ([]types.Finding, error)) Model {
+	// Load user preferences
+	prefs := LoadPrefs()
+
 	columns := []table.Column{
 		{Title: "Sev", Width: 8},
 		{Title: "Detector", Width: 20},
@@ -197,11 +207,15 @@ func NewModel(findings []types.Finding, rescanFunc func() ([]types.Finding, erro
 
 	rows := make([]table.Row, len(findings))
 	for i, f := range findings {
+		match := f.Match
+		if prefs.HideSecrets {
+			match = redactSecret(match)
+		}
 		rows[i] = table.Row{
 			severityText(f.Severity),
 			f.Detector,
 			f.Path,
-			f.Match,
+			match,
 		}
 	}
 
@@ -255,15 +269,16 @@ func NewModel(findings []types.Finding, rescanFunc func() ([]types.Finding, erro
 		lastScanTime:     time.Now(),        // Set scan time to now
 		searchInput:      ti,
 		selectedFindings: make(map[int]bool),
-		contextLines:     3,         // Default context lines around finding
-		groupMode:        GroupNone, // No grouping by default
+		contextLines:     3,                 // Default context lines around finding
+		hideSecrets:      prefs.HideSecrets, // Load from preferences (default: true)
+		groupMode:        GroupNone,         // No grouping by default
 		expandedGroups:   make(map[string]bool),
 	}
 
 	if m.showEmpty {
 		m.statusMessage = "q: quit | r: rescan | a: audit log"
 	} else {
-		m.statusMessage = "q: quit | ?: help | j/k: navigate | o: open | r: rescan | i: ignore | b: baseline"
+		m.statusMessage = "q: quit | ?: help | j/k: navigate | o: open | r: rescan | *: toggle secrets"
 	}
 
 	return m
@@ -294,11 +309,15 @@ func NewModelWithBaseline(findings []types.Finding, baseline report.Baseline, re
 			sev = "(b) " + sev
 		}
 
+		match := f.Match
+		if m.hideSecrets {
+			match = redactSecret(match)
+		}
 		rows[i] = table.Row{
 			sev,
 			f.Detector,
 			f.Path,
-			f.Match,
+			match,
 		}
 	}
 	m.table.SetRows(rows)
@@ -401,10 +420,17 @@ func (m *Model) rebuildTableRows() {
 				var col2, col3 string
 				if m.groupMode == GroupByFile {
 					col2 = f.Detector
-					col3 = fmt.Sprintf("L%d: %s", f.Line, f.Match)
+					matchDisplay := f.Match
+					if m.hideSecrets {
+						matchDisplay = redactSecret(matchDisplay)
+					}
+					col3 = fmt.Sprintf("L%d: %s", f.Line, matchDisplay)
 				} else {
 					col2 = f.Path
 					col3 = f.Match
+					if m.hideSecrets {
+						col3 = redactSecret(col3)
+					}
 				}
 
 				rows[i] = table.Row{sev, col2, col3, ""}
@@ -437,7 +463,11 @@ func (m *Model) rebuildTableRows() {
 			}
 		}
 
-		rows[i] = table.Row{sev, f.Detector, f.Path, f.Match}
+		match := f.Match
+		if m.hideSecrets {
+			match = redactSecret(match)
+		}
+		rows[i] = table.Row{sev, f.Detector, f.Path, match}
 	}
 	m.table.SetRows(rows)
 	if m.table.Cursor() >= len(findings) {
@@ -1043,7 +1073,11 @@ func (m *Model) updateViewportContentForFinding(f types.Finding) {
 		b.WriteString(fmt.Sprintf("%s %d\n", keyStyle.Render("Column:"), f.Column))
 	}
 	if f.Secret != "" {
-		b.WriteString(fmt.Sprintf("%s %s\n", keyStyle.Render("Secret:"), f.Secret))
+		secretDisplay := f.Secret
+		if m.hideSecrets {
+			secretDisplay = redactSecret(secretDisplay)
+		}
+		b.WriteString(fmt.Sprintf("%s %s\n", keyStyle.Render("Secret:"), secretDisplay))
 	}
 	if len(f.Metadata) > 0 {
 		b.WriteString(fmt.Sprintf("%s\n", keyStyle.Render("Metadata:")))
@@ -1079,11 +1113,21 @@ func (m *Model) updateViewportContentForFinding(f types.Finding) {
 		for i, line := range lines {
 			lineNum := startLine + i
 			lineNumStr := lineNumStyle.Render(fmt.Sprintf("%4d ", lineNum))
-			highlightedLine := highlightLine(line, filename)
+
+			// When hiding secrets, redact the match in the source line
+			displayLine := line
+			if m.hideSecrets && f.Match != "" {
+				displayLine = strings.ReplaceAll(displayLine, f.Match, redactSecret(f.Match))
+			}
+			highlightedLine := highlightLine(displayLine, filename)
 
 			if lineNum == f.Line {
 				if f.Match != "" {
-					highlightedLine = strings.ReplaceAll(highlightedLine, f.Match, matchStyle.Render(f.Match))
+					matchDisplay := f.Match
+					if m.hideSecrets {
+						matchDisplay = redactSecret(f.Match)
+					}
+					highlightedLine = strings.ReplaceAll(highlightedLine, matchDisplay, matchStyle.Render(matchDisplay))
 				}
 				b.WriteString(lineNumStr + highlightLineStyle.Render(highlightedLine) + "\n")
 			} else {
@@ -1096,6 +1140,11 @@ func (m *Model) updateViewportContentForFinding(f types.Finding) {
 			context = f.Match
 		}
 
+		// Redact secret in context if hiding
+		if m.hideSecrets && f.Match != "" {
+			context = strings.ReplaceAll(context, f.Match, redactSecret(f.Match))
+		}
+
 		filename := f.Path
 		if strings.Contains(filename, "::") {
 			parts := strings.Split(filename, "::")
@@ -1104,7 +1153,11 @@ func (m *Model) updateViewportContentForFinding(f types.Finding) {
 		context = highlightCode(context, filename)
 
 		if f.Match != "" {
-			context = strings.ReplaceAll(context, f.Match, matchStyle.Render(f.Match))
+			matchDisplay := f.Match
+			if m.hideSecrets {
+				matchDisplay = redactSecret(f.Match)
+			}
+			context = strings.ReplaceAll(context, matchDisplay, matchStyle.Render(matchDisplay))
 		}
 		b.WriteString(context)
 	}
@@ -1149,11 +1202,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 					rows := make([]table.Row, len(m.findings))
 					for i, f := range m.findings {
+						match := f.Match
+						if m.hideSecrets {
+							match = redactSecret(match)
+						}
 						rows[i] = table.Row{
 							severityText(f.Severity),
 							f.Detector,
 							f.Path,
-							f.Match,
+							match,
 						}
 					}
 					m.table.SetRows(rows)
@@ -1195,6 +1252,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.exportFindings("sarif")
 			case "esc", "q", "e":
 				m.showExportMenu = false
+				return m, nil
+			}
+			return m, nil
+		}
+
+		if m.showClearConfirm {
+			switch msg.String() {
+			case "y", "Y":
+				if m.clearConfirmStage == 1 {
+					// First confirmation received, show second
+					m.clearConfirmStage = 2
+					return m, nil
+				} else if m.clearConfirmStage == 2 {
+					// Second confirmation received, delete files
+					m.showClearConfirm = false
+					m.clearConfirmStage = 0
+					return m, m.clearHistory()
+				}
+			case "n", "N", "esc", "q":
+				m.showClearConfirm = false
+				m.clearConfirmStage = 0
+				timeout := time.Now().Add(3 * time.Second)
+				m.statusTimeout = &timeout
+				m.statusMessage = "Clear history canceled"
 				return m, nil
 			}
 			return m, nil
@@ -1435,6 +1516,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.statusMessage = fmt.Sprintf("Context: %d lines", m.contextLines*2+1)
 				return m, nil
 			}
+		case "*": // toggle hide secrets
+			m.hideSecrets = !m.hideSecrets
+			// Persist preference
+			prefs := Prefs{HideSecrets: m.hideSecrets}
+			_ = SavePrefs(prefs) //nolint:errcheck // Best effort save, don't fail TUI
+			m.rebuildTableRows()
+			timeout := time.Now().Add(3 * time.Second)
+			m.statusTimeout = &timeout
+			if m.hideSecrets {
+				m.statusMessage = "Secrets hidden (*: show)"
+			} else {
+				m.statusMessage = "Secrets visible (*: hide)"
+			}
+			return m, nil
 		case "y": // copy path
 			if !m.showEmpty {
 				return m, m.copyPathToClipboard()
@@ -1496,6 +1591,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			m.showScanHistory = !m.showScanHistory
+		case "X": // clear history (requires double confirmation)
+			m.showClearConfirm = true
+			m.clearConfirmStage = 1
+			return m, nil
 		case "?", "h":
 			m.showHelp = !m.showHelp
 			return m, nil
@@ -1610,11 +1709,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		rows := make([]table.Row, len(m.findings))
 		for i, f := range m.findings {
+			match := f.Match
+			if m.hideSecrets {
+				match = redactSecret(match)
+			}
 			rows[i] = table.Row{
 				severityText(f.Severity),
 				f.Detector,
 				f.Path,
-				f.Match,
+				match,
 			}
 		}
 		m.table.SetRows(rows)
@@ -1646,7 +1749,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.showEmpty {
 				m.statusMessage = "q: quit | r: rescan"
 			} else {
-				m.statusMessage = "q: quit | ?: help | j/k: navigate | o: open | r: rescan | i: ignore | b: baseline"
+				m.statusMessage = "q: quit | ?: help | j/k: navigate | o: open | r: rescan | *: toggle secrets"
 			}
 		}
 		return m, spinCmd
@@ -1728,10 +1831,14 @@ func (m Model) View() string {
 		if len(m.selectedFindings) > 0 {
 			selectionInfo = fmt.Sprintf("  [%d selected]", len(m.selectedFindings))
 		}
+		var hideSecretsIndicator string
+		if m.hideSecrets {
+			hideSecretsIndicator = "  [SECRETS HIDDEN]"
+		}
 
 		if m.filteredFindings != nil {
 			statsContent = fmt.Sprintf(
-				"Showing: %d/%d  |  %s %-4d  |  %s %-4d  |  %s %-4d%s%s%s",
+				"Showing: %d/%d  |  %s %-4d  |  %s %-4d  |  %s %-4d%s%s%s%s",
 				len(displayFindings),
 				len(m.findings),
 				sevHighStyle.Render("High:"),
@@ -1743,10 +1850,11 @@ func (m Model) View() string {
 				filterInfo,
 				sortInfo,
 				selectionInfo,
+				hideSecretsIndicator,
 			)
 		} else {
 			statsContent = fmt.Sprintf(
-				"Total: %-4d  |  %s %-4d  |  %s %-4d  |  %s %-4d%s%s",
+				"Total: %-4d  |  %s %-4d  |  %s %-4d  |  %s %-4d%s%s%s",
 				len(m.findings),
 				sevHighStyle.Render("High:"),
 				highCount,
@@ -1756,6 +1864,7 @@ func (m Model) View() string {
 				lowCount,
 				sortInfo,
 				selectionInfo,
+				hideSecretsIndicator,
 			)
 		}
 	}
@@ -1849,74 +1958,47 @@ func (m Model) View() string {
 
 	if m.showHelp {
 		titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15"))
-		sectionStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
-		keyColor := lipgloss.Color("10")
-		descColor := lipgloss.Color("250")
+		sepStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 
-		formatRow := func(key, desc string) string {
-			keyStyled := lipgloss.NewStyle().Foreground(keyColor).Render(key)
-			descStyled := lipgloss.NewStyle().Foreground(descColor).Render(desc)
-			padding := 12 - len(key)
-			if padding < 1 {
-				padding = 1
-			}
-			return "  " + keyStyled + strings.Repeat(" ", padding) + descStyled
+		// Build a row with consistent blue background
+		rowBg := lipgloss.Color("235") // match popup background
+		keyOnBg := lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Background(rowBg)
+		descOnBg := lipgloss.NewStyle().Foreground(lipgloss.Color("250")).Background(rowBg)
+		rowStyle := lipgloss.NewStyle().Background(rowBg)
+
+		row := func(k1, d1, k2, d2 string) string {
+			result := keyOnBg.Render(fmt.Sprintf("%-6s", k1)) +
+				descOnBg.Render(fmt.Sprintf("%-14s", d1)) +
+				rowStyle.Render("  ") +
+				keyOnBg.Render(fmt.Sprintf("%-6s", k2)) +
+				descOnBg.Render(fmt.Sprintf("%-14s", d2))
+			return result
 		}
 
 		var lines []string
 		lines = append(lines, titleStyle.Render("Keyboard Shortcuts"))
 		lines = append(lines, "")
-		lines = append(lines, sectionStyle.Render("Navigation"))
-		lines = append(lines, formatRow("j / k", "Move down / up"))
-		lines = append(lines, formatRow("Ctrl+d/u", "Half-page down / up"))
-		lines = append(lines, formatRow("Ctrl+f/b", "Full page down / up"))
-		lines = append(lines, formatRow("g / G", "First / last row"))
-		lines = append(lines, formatRow("n / N", "Next / prev HIGH finding"))
+		lines = append(lines, row("j/k", "Navigate", "g/G", "Top/bottom"))
+		lines = append(lines, row("n/N", "Next/prev HIGH", "^d/u", "Half-page"))
+		lines = append(lines, sepStyle.Render(strings.Repeat("─", 42)))
+		lines = append(lines, row("/", "Search", "Esc", "Clear filter"))
+		lines = append(lines, row("1/2/3", "HIGH/MED/LOW", "s/S", "Sort"))
+		lines = append(lines, sepStyle.Render(strings.Repeat("─", 42)))
+		lines = append(lines, row("Enter", "Open in editor", "r", "Rescan"))
+		lines = append(lines, row("i/I", "Ignore file", "b/U", "Baseline"))
+		lines = append(lines, row("v/V", "Select", "B", "Bulk baseline"))
+		lines = append(lines, sepStyle.Render(strings.Repeat("─", 42)))
+		lines = append(lines, row("e", "Export", "y/Y", "Copy path"))
+		lines = append(lines, row("+/-", "Expand context", "gf", "Group by file"))
+		lines = append(lines, row("D", "Diff view", "a", "Audit log"))
+		lines = append(lines, sepStyle.Render(strings.Repeat("─", 42)))
+		lines = append(lines, row("*", "Hide secrets", "X", "Clear history"))
+		lines = append(lines, row("?", "This help", "q", "Quit"))
 		lines = append(lines, "")
-		lines = append(lines, sectionStyle.Render("Search & Filter"))
-		lines = append(lines, formatRow("/", "Search findings"))
-		lines = append(lines, formatRow("1 / 2 / 3", "Filter HIGH / MED / LOW"))
-		lines = append(lines, formatRow("s / S", "Sort / reverse sort"))
-		lines = append(lines, formatRow("Esc", "Clear filters"))
-		lines = append(lines, "")
-		lines = append(lines, sectionStyle.Render("Selection & Bulk"))
-		lines = append(lines, formatRow("v / V", "Select one / select all"))
-		lines = append(lines, formatRow("B", "Bulk baseline selected"))
-		lines = append(lines, formatRow("Ctrl+i", "Bulk ignore selected"))
-		lines = append(lines, "")
-		lines = append(lines, sectionStyle.Render("Export & Copy"))
-		lines = append(lines, formatRow("e", "Export (JSON/CSV/SARIF)"))
-		lines = append(lines, formatRow("y / Y", "Copy path / full finding"))
-		lines = append(lines, "")
-		lines = append(lines, sectionStyle.Render("Context"))
-		lines = append(lines, formatRow("+ / -", "Expand / contract context"))
-		lines = append(lines, "")
-		lines = append(lines, sectionStyle.Render("Actions"))
-		lines = append(lines, formatRow("Enter", "Open in $EDITOR"))
-		lines = append(lines, formatRow("i / I", "Ignore / unignore file"))
-		lines = append(lines, formatRow("b / U", "Baseline / unbaseline"))
-		lines = append(lines, formatRow("r", "Rescan"))
-		lines = append(lines, "")
-		lines = append(lines, sectionStyle.Render("Grouping"))
-		lines = append(lines, formatRow("gf", "Group by file"))
-		lines = append(lines, formatRow("gd", "Group by detector"))
-		lines = append(lines, formatRow("Tab", "Expand/collapse group"))
-		lines = append(lines, "")
-		lines = append(lines, sectionStyle.Render("Diff & History"))
-		lines = append(lines, formatRow("D", "Diff vs previous scan"))
-		lines = append(lines, formatRow("a", "View audit history"))
-		lines = append(lines, "")
-		lines = append(lines, sectionStyle.Render("Other"))
-		lines = append(lines, formatRow("?", "Toggle help"))
-		lines = append(lines, formatRow("q", "Quit"))
-		lines = append(lines, "")
-		lines = append(lines, lipgloss.NewStyle().
-			Foreground(lipgloss.Color("8")).
-			Italic(true).
-			Render("Press any key to close"))
+		lines = append(lines, sepStyle.Italic(true).Render("Press any key to close"))
 
 		helpContent := lipgloss.JoinVertical(lipgloss.Left, lines...)
-		helpBox := popupStyle.Width(44).Padding(1, 3).Render(helpContent)
+		helpBox := popupStyle.Width(48).Padding(1, 2).Render(helpContent)
 		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, helpBox)
 	}
 
@@ -1955,6 +2037,42 @@ func (m Model) View() string {
 			Render(exportContent)
 
 		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, exportBox)
+	}
+
+	if m.showClearConfirm {
+		titleStyle := lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("15"))
+
+		warningStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("9")).
+			Bold(true)
+
+		var lines []string
+		if m.clearConfirmStage == 1 {
+			lines = append(lines, titleStyle.Render("Clear Scan History?"))
+			lines = append(lines, "")
+			lines = append(lines, "This will delete:")
+			lines = append(lines, "  - .redactyl_audit.jsonl (audit log)")
+			lines = append(lines, "  - .redactyl_last_scan.json (scan cache)")
+			lines = append(lines, "")
+			lines = append(lines, warningStyle.Render("This cannot be undone."))
+			lines = append(lines, "")
+			lines = append(lines, "Press Y to continue, N to cancel")
+		} else if m.clearConfirmStage == 2 {
+			lines = append(lines, warningStyle.Render("ARE YOU SURE?"))
+			lines = append(lines, "")
+			lines = append(lines, "Press Y again to confirm deletion")
+			lines = append(lines, "Press N to cancel")
+		}
+
+		confirmContent := lipgloss.JoinVertical(lipgloss.Left, lines...)
+		confirmBox := popupStyle.
+			Width(45).
+			Padding(1, 3).
+			Render(confirmContent)
+
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, confirmBox)
 	}
 
 	if m.diffMode {

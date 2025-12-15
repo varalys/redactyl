@@ -28,12 +28,15 @@ var defaultExcludeFileSuffixes = []string{
 }
 
 var defaultExcludeFileNames = map[string]bool{
-	"yarn.lock":         true,
-	"package-lock.json": true,
-	"pnpm-lock.yaml":    true,
-	"composer.lock":     true,
-	"poetry.lock":       true,
-	".DS_Store":         true,
+	"yarn.lock":                true,
+	"package-lock.json":        true,
+	"pnpm-lock.yaml":           true,
+	"composer.lock":            true,
+	"poetry.lock":              true,
+	".DS_Store":                true,
+	".redactyl_audit.jsonl":    true, // Redactyl's own audit log (contains previous findings)
+	".redactyl_last_scan.json": true, // Redactyl's scan cache (contains previous findings)
+	".redactyl_baseline.json":  true, // Redactyl's baseline file
 }
 
 func isDefaultDirExcluded(name string) bool {

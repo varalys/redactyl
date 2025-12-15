@@ -824,4 +824,27 @@ func (m *Model) findingsToSARIF(findings []types.Finding) ([]byte, error) {
 	return json.MarshalIndent(report, "", "  ")
 }
 
+// clearHistory deletes all scan history and cache files.
+func (m *Model) clearHistory() tea.Cmd {
+	return func() tea.Msg {
+		var errors []string
+
+		// Delete audit log
+		if err := os.Remove(".redactyl_audit.jsonl"); err != nil && !os.IsNotExist(err) {
+			errors = append(errors, fmt.Sprintf("audit log: %v", err))
+		}
+
+		// Delete last scan cache
+		if err := os.Remove(".redactyl_last_scan.json"); err != nil && !os.IsNotExist(err) {
+			errors = append(errors, fmt.Sprintf("scan cache: %v", err))
+		}
+
+		if len(errors) > 0 {
+			return statusMsg(fmt.Sprintf("Partial clear: %s", strings.Join(errors, "; ")))
+		}
+
+		return statusMsg("Scan history cleared")
+	}
+}
+
 type statusMsg string
