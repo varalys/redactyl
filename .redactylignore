@@ -7,5 +7,20 @@ vendor/**
 *.der
 *.p12
 *.keystore
+go.sum
+
+# test files (contain intentional test secrets)
+*_test.go
+**/*_test.go
+
+# test data directories (may contain intentional secrets for testing)
 testdata/**
-fixtures/**
+**/testdata/**
+**/fixtures/**
+**/results/**
+
+# integration test files
+test/integration/**
+
+# documentation with example tokens
+docs/rules/**

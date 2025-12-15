@@ -973,3 +973,114 @@ func TestSortColumnConstants(t *testing.T) {
 		t.Error("SortDetector should be 'detector'")
 	}
 }
+
+// =============================================================================
+// Hide Secrets Tests
+// =============================================================================
+
+func TestNewModel_HideSecretsDefault(t *testing.T) {
+	// NewModel loads preferences, which default to hideSecrets=true
+	findings := []types.Finding{
+		{Path: "file.go", Match: "ghp_SuperSecretToken12345"},
+	}
+
+	m := NewModel(findings, nil)
+
+	// Should default to true (from DefaultPrefs)
+	if !m.hideSecrets {
+		t.Error("hideSecrets should default to true")
+	}
+}
+
+func TestRebuildTableRows_HideSecrets(t *testing.T) {
+	findings := []types.Finding{
+		{Path: "file.go", Detector: "github-pat", Match: "ghp_SuperSecretToken12345", Severity: types.SevHigh},
+	}
+
+	m := NewModel(findings, nil)
+	m.ready = true
+
+	// When hideSecrets is true, table should show redacted match
+	m.hideSecrets = true
+	m.rebuildTableRows()
+
+	rows := m.table.Rows()
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(rows))
+	}
+
+	// Match column (index 3) should be redacted
+	match := rows[0][3]
+	if match == "ghp_SuperSecretToken12345" {
+		t.Error("match should be redacted when hideSecrets=true")
+	}
+	if match != "ghp_***" {
+		t.Errorf("expected redacted match 'ghp_***', got '%s'", match)
+	}
+
+	// When hideSecrets is false, should show full match
+	m.hideSecrets = false
+	m.rebuildTableRows()
+
+	rows = m.table.Rows()
+	match = rows[0][3]
+	if match != "ghp_SuperSecretToken12345" {
+		t.Errorf("expected full match when hideSecrets=false, got '%s'", match)
+	}
+}
+
+func TestRebuildTableRows_GroupedMode_HideSecrets(t *testing.T) {
+	findings := []types.Finding{
+		{Path: "file.go", Detector: "github-pat", Match: "ghp_SecretToken123", Line: 10, Severity: types.SevHigh},
+	}
+
+	m := NewModel(findings, nil)
+	m.ready = true
+	m.hideSecrets = true
+
+	// Enable grouping by file
+	m.setGroupMode(GroupByFile)
+	m.expandedGroups["file.go"] = true // Expand the group
+	m.rebuildTableRows()
+
+	// Find the finding row (not the group header)
+	found := false
+	for _, row := range m.table.Rows() {
+		// Group header has empty col2 and col3
+		if row[1] != "" { // This is a finding row
+			// Match should be redacted in grouped mode too
+			if strings.Contains(row[2], "ghp_SecretToken123") {
+				t.Error("match should be redacted in grouped mode when hideSecrets=true")
+			}
+			if strings.Contains(row[2], "ghp_***") {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Error("should find redacted match in grouped view")
+	}
+}
+
+func TestToggleHideSecrets(t *testing.T) {
+	findings := []types.Finding{
+		{Path: "file.go", Match: "secret123"},
+	}
+
+	m := NewModel(findings, nil)
+
+	// Start with hidden
+	m.hideSecrets = true
+
+	// Toggle off
+	m.hideSecrets = !m.hideSecrets
+	if m.hideSecrets {
+		t.Error("hideSecrets should be false after toggle")
+	}
+
+	// Toggle on
+	m.hideSecrets = !m.hideSecrets
+	if !m.hideSecrets {
+		t.Error("hideSecrets should be true after second toggle")
+	}
+}

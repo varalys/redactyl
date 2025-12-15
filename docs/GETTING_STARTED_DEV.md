@@ -217,7 +217,7 @@ Create this test suite as you develop:
 
 ```bash
 # 1. Basic scan
-echo 'GITHUB_TOKEN=ghp_1234567890' > /tmp/test.txt
+echo 'GITHUB_TOKEN=GITH***' > /tmp/test.txt
 ./bin/redactyl scan /tmp/test.txt
 
 # 2. Archive scanning

@@ -48,3 +48,27 @@ func TestCountTargets_InlineIgnoreAndMaxBytes(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestIsDefaultFileExcluded_RedactylFiles(t *testing.T) {
+	tests := []struct {
+		path     string
+		excluded bool
+	}{
+		{".redactyl_audit.jsonl", true},
+		{".redactyl_last_scan.json", true},
+		{".redactyl_baseline.json", true},
+		{"src/.redactyl_audit.jsonl", true},
+		{"deep/nested/.redactyl_last_scan.json", true},
+		{"normal_file.go", false},
+		{"config.json", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			got := isDefaultFileExcluded(tt.path)
+			if got != tt.excluded {
+				t.Errorf("isDefaultFileExcluded(%q) = %v, want %v", tt.path, got, tt.excluded)
+			}
+		})
+	}
+}
