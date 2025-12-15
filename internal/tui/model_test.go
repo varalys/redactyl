@@ -1014,8 +1014,8 @@ func TestRebuildTableRows_HideSecrets(t *testing.T) {
 	if match == "ghp_SuperSecretToken12345" {
 		t.Error("match should be redacted when hideSecrets=true")
 	}
-	if match != "ghp_***" {
-		t.Errorf("expected redacted match 'ghp_***', got '%s'", match)
+	if match != "ghp_Su..." {
+		t.Errorf("expected redacted match 'ghp_Su...', got '%s'", match)
 	}
 
 	// When hideSecrets is false, should show full match
@@ -1052,7 +1052,7 @@ func TestRebuildTableRows_GroupedMode_HideSecrets(t *testing.T) {
 			if strings.Contains(row[2], "ghp_SecretToken123") {
 				t.Error("match should be redacted in grouped mode when hideSecrets=true")
 			}
-			if strings.Contains(row[2], "ghp_***") {
+			if strings.Contains(row[2], "ghp_Se...") {
 				found = true
 			}
 		}
