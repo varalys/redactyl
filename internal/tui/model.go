@@ -1074,17 +1074,40 @@ func (m *Model) updateViewportContentForFinding(f types.Finding) {
 		b.WriteString(fmt.Sprintf("%s %s\n", keyStyle.Render("Secret:"), secretDisplay))
 	}
 	if len(f.Metadata) > 0 {
-		b.WriteString(fmt.Sprintf("%s\n", keyStyle.Render("Metadata:")))
-		for k, v := range f.Metadata {
-			b.WriteString(fmt.Sprintf("  %s: %s\n", lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render(k), v))
+		// Filter out commit-related keys (shown separately)
+		skipKeys := map[string]bool{"commit": true, "author": true, "date": true}
+		var hasDisplayable bool
+		for k := range f.Metadata {
+			if !skipKeys[k] {
+				hasDisplayable = true
+				break
+			}
+		}
+		if hasDisplayable {
+			b.WriteString(fmt.Sprintf("%s\n", keyStyle.Render("Metadata:")))
+			for k, v := range f.Metadata {
+				if !skipKeys[k] {
+					b.WriteString(fmt.Sprintf("  %s: %s\n", lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render(k), v))
+				}
+			}
 		}
 	}
 
 	if !isVirtual {
+		commitStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
 		if blame := getGitBlame(f.Path, f.Line); blame != nil {
-			commitStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
 			commitText := fmt.Sprintf("%s (%s, %s)", blame.Commit, blame.Author, blame.Date)
 			b.WriteString(fmt.Sprintf("%s %s\n", keyStyle.Render("Commit:"), commitStyle.Render(commitText)))
+		} else if f.Metadata != nil {
+			// Fallback to metadata for commit info (used in demo mode)
+			if commit, ok := f.Metadata["commit"]; ok {
+				author := f.Metadata["author"]
+				date := f.Metadata["date"]
+				if author != "" && date != "" {
+					commitText := fmt.Sprintf("%s (%s, %s)", commit, author, date)
+					b.WriteString(fmt.Sprintf("%s %s\n", keyStyle.Render("Commit:"), commitStyle.Render(commitText)))
+				}
+			}
 		}
 	}
 
