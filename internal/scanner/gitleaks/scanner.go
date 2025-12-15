@@ -124,6 +124,11 @@ func (s *Scanner) ScanBatch(inputs []scanner.BatchInput) ([]types.Finding, error
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp workspace: %w", err)
 	}
+	// Set restrictive permissions on temp directory containing sensitive data
+	if err := os.Chmod(tmpDir, 0700); err != nil {
+		_ = os.RemoveAll(tmpDir) //nolint:errcheck
+		return nil, fmt.Errorf("failed to secure temp workspace: %w", err)
+	}
 	defer func() {
 		_ = os.RemoveAll(tmpDir) //nolint:errcheck // Best-effort cleanup
 	}()
