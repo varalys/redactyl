@@ -27,6 +27,30 @@ func isVirtualPath(path string) bool {
 	return strings.Contains(path, "::")
 }
 
+// resolveEditor validates and resolves the EDITOR environment variable.
+// Returns the resolved editor path, base name, and any error.
+// This provides defense in depth by verifying the editor exists before execution.
+func resolveEditor() (editorPath, editorBase string, err error) {
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = "vim"
+	}
+
+	// Verify the editor exists and is executable
+	resolvedPath, err := exec.LookPath(editor)
+	if err != nil {
+		return "", "", fmt.Errorf("editor %q not found: %w", editor, err)
+	}
+
+	// Extract base name for switch statement
+	base := editor
+	if idx := strings.LastIndex(editor, "/"); idx != -1 {
+		base = editor[idx+1:]
+	}
+
+	return resolvedPath, base, nil
+}
+
 // parseVirtualPath extracts archive and internal path from a virtual path
 // e.g., "image.tar::layer123::config.yaml" -> ("image.tar", "layer123::config.yaml")
 func parseVirtualPath(path string) (archive string, internal string) {
@@ -298,17 +322,12 @@ func (m Model) openVirtualFile(f *types.Finding) tea.Cmd {
 			return statusMsg(fmt.Sprintf("Extract failed: %v", err))
 		}
 
-		editor := os.Getenv("EDITOR")
-		if editor == "" {
-			editor = "vim"
+		editor, editorBase, err := resolveEditor()
+		if err != nil {
+			return statusMsg(fmt.Sprintf("Editor error: %v", err))
 		}
 
 		var args []string
-		editorBase := editor
-		if idx := strings.LastIndex(editor, "/"); idx != -1 {
-			editorBase = editor[idx+1:]
-		}
-
 		switch editorBase {
 		case "code", "code-insiders":
 			args = []string{"-g", fmt.Sprintf("%s:%d:%d", tempPath, f.Line, f.Column)}
@@ -356,17 +375,14 @@ func (m Model) openEditor() tea.Cmd {
 		return m.openVirtualFile(f)
 	}
 
-	editor := os.Getenv("EDITOR")
-	if editor == "" {
-		editor = "vim"
+	editor, editorBase, err := resolveEditor()
+	if err != nil {
+		return func() tea.Msg {
+			return statusMsg(fmt.Sprintf("Editor error: %v", err))
+		}
 	}
 
 	var args []string
-	editorBase := editor
-	if idx := strings.LastIndex(editor, "/"); idx != -1 {
-		editorBase = editor[idx+1:]
-	}
-
 	switch editorBase {
 	case "code", "code-insiders":
 		args = []string{"-g", fmt.Sprintf("%s:%d:%d", f.Path, f.Line, f.Column)}
