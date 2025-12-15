@@ -73,7 +73,8 @@ func (a *AuditLog) LogScan(record ScanRecord) error {
 		record.ScanID = fmt.Sprintf("scan_%d", time.Now().Unix())
 	}
 
-	f, err := os.OpenFile(a.logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	// Restrict permissions to owner-only for audit log containing finding metadata
+	f, err := os.OpenFile(a.logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 	if err != nil {
 		return fmt.Errorf("failed to open audit log: %w", err)
 	}
@@ -143,6 +144,9 @@ func CreateScanRecord(
 		})
 	}
 
+	// Redact secrets from findings before storing in audit log
+	redactedFindings := redactSecrets(allFindings)
+
 	return ScanRecord{
 		Timestamp:      time.Now(),
 		Root:           root,
@@ -154,6 +158,19 @@ func CreateScanRecord(
 		Duration:       duration.String(),
 		BaselineFile:   baselineFile,
 		TopFindings:    topFindings,
-		AllFindings:    allFindings,
+		AllFindings:    redactedFindings,
 	}
+}
+
+// redactSecrets returns a copy of findings with the Secret field redacted.
+// This prevents actual secret values from being written to the audit log.
+func redactSecrets(findings []types.Finding) []types.Finding {
+	redacted := make([]types.Finding, len(findings))
+	for i, f := range findings {
+		redacted[i] = f
+		if f.Secret != "" {
+			redacted[i].Secret = "[REDACTED]"
+		}
+	}
+	return redacted
 }

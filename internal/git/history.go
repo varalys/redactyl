@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -13,13 +15,45 @@ type Entry struct {
 	Files map[string][]byte
 }
 
+// validateRoot validates and normalizes a git repository root path.
+// Returns the cleaned absolute path or an error if invalid.
+func validateRoot(root string) (string, error) {
+	// Check for null bytes (potential injection)
+	if strings.ContainsRune(root, 0) {
+		return "", fmt.Errorf("invalid path: contains null byte")
+	}
+
+	// Clean and make absolute
+	cleaned := filepath.Clean(root)
+	abs, err := filepath.Abs(cleaned)
+	if err != nil {
+		return "", fmt.Errorf("invalid path %q: %w", root, err)
+	}
+
+	// Verify it's a directory
+	info, err := os.Stat(abs)
+	if err != nil {
+		return "", fmt.Errorf("cannot access path %q: %w", root, err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("path is not a directory: %s", root)
+	}
+
+	return abs, nil
+}
+
 // RepoMetadata returns (repo, commit, branch) best-effort for the given root.
 // Empty strings are returned on failure. It avoids heavy git calls and uses
 // simple plumbing to remain fast in CI.
 func RepoMetadata(root string) (string, string, string) {
+	validRoot, err := validateRoot(root)
+	if err != nil {
+		return "", "", ""
+	}
+
 	// repo (remote origin URL short)
 	repo := ""
-	if out, err := exec.Command("git", "-C", root, "config", "--get", "remote.origin.url").Output(); err == nil {
+	if out, err := exec.Command("git", "-C", validRoot, "config", "--get", "remote.origin.url").Output(); err == nil {
 		s := strings.TrimSpace(string(out))
 		// trim common suffix
 		s = strings.TrimSuffix(s, ".git")
@@ -34,12 +68,12 @@ func RepoMetadata(root string) (string, string, string) {
 	}
 	// commit
 	commit := ""
-	if out, err := exec.Command("git", "-C", root, "rev-parse", "HEAD").Output(); err == nil {
+	if out, err := exec.Command("git", "-C", validRoot, "rev-parse", "HEAD").Output(); err == nil {
 		commit = strings.TrimSpace(string(out))
 	}
 	// branch (try symbolic-ref, fallback to show-branch)
 	branch := ""
-	if out, err := exec.Command("git", "-C", root, "rev-parse", "--abbrev-ref", "HEAD").Output(); err == nil {
+	if out, err := exec.Command("git", "-C", validRoot, "rev-parse", "--abbrev-ref", "HEAD").Output(); err == nil {
 		branch = strings.TrimSpace(string(out))
 	}
 	return repo, commit, branch
@@ -49,8 +83,14 @@ func LastNCommits(root string, n int) ([]Entry, error) {
 	if n <= 0 {
 		return nil, nil
 	}
+
+	validRoot, err := validateRoot(root)
+	if err != nil {
+		return nil, err
+	}
+
 	// Use `git show` per commit to keep it simple
-	cmd := exec.Command("git", "-C", root, "rev-list", "--max-count", fmt.Sprintf("%d", n), "HEAD")
+	cmd := exec.Command("git", "-C", validRoot, "rev-list", "--max-count", fmt.Sprintf("%d", n), "HEAD")
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, err
@@ -60,7 +100,7 @@ func LastNCommits(root string, n int) ([]Entry, error) {
 	var entries []Entry
 	for _, h := range hashes {
 		// get changed files + content in commit
-		cmd = exec.Command("git", "-C", root, "show", h, "--name-only", "--pretty=")
+		cmd = exec.Command("git", "-C", validRoot, "show", h, "--name-only", "--pretty=")
 		filesOut, err := cmd.Output()
 		if err != nil {
 			continue
@@ -68,7 +108,7 @@ func LastNCommits(root string, n int) ([]Entry, error) {
 		fileList := strings.Fields(string(filesOut))
 		files := map[string][]byte{}
 		for _, p := range fileList {
-			show := exec.Command("git", "-C", root, "show", h+":"+p)
+			show := exec.Command("git", "-C", validRoot, "show", h+":"+p)
 			b, err := show.Output()
 			if err == nil {
 				files[p] = b
@@ -80,7 +120,12 @@ func LastNCommits(root string, n int) ([]Entry, error) {
 }
 
 func DiffAgainst(root, base string) ([]string, [][]byte, error) {
-	cmd := exec.Command("git", "-C", root, "diff", "--name-only", base)
+	validRoot, err := validateRoot(root)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	cmd := exec.Command("git", "-C", validRoot, "diff", "--name-only", base)
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, nil, err
@@ -88,7 +133,7 @@ func DiffAgainst(root, base string) ([]string, [][]byte, error) {
 	paths := strings.Fields(string(out))
 	var data [][]byte
 	for _, p := range paths {
-		show := exec.Command("git", "-C", root, "diff", "--unified=0", base, "--", p)
+		show := exec.Command("git", "-C", validRoot, "diff", "--unified=0", base, "--", p)
 		b, err := show.Output()
 		if err != nil {
 			b = []byte{}
@@ -112,7 +157,12 @@ func DiffAgainst(root, base string) ([]string, [][]byte, error) {
 }
 
 func StagedDiff(root string) ([]string, [][]byte, error) {
-	cmd := exec.Command("git", "-C", root, "diff", "--name-only", "--cached")
+	validRoot, err := validateRoot(root)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	cmd := exec.Command("git", "-C", validRoot, "diff", "--name-only", "--cached")
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, nil, err
@@ -120,7 +170,7 @@ func StagedDiff(root string) ([]string, [][]byte, error) {
 	paths := strings.Fields(string(out))
 	var data [][]byte
 	for _, p := range paths {
-		show := exec.Command("git", "-C", root, "show", ":"+p)
+		show := exec.Command("git", "-C", validRoot, "show", ":"+p)
 		b, err := show.Output()
 		if err != nil {
 			b = []byte{}

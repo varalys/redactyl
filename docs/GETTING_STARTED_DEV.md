@@ -2,22 +2,19 @@
 
 **For developers working on Redactyl - the deep artifact scanner for cloud-native environments**
 
-**Last Updated:** 2025-10-28
+**Last Updated:** 2025-12-15
 
 ---
 
 ## Quick Context
 
-**Read these first:**
-1. `/CLAUDE.md` - Strategic context, decisions, and project direction
-2. `/ROADMAP.md` - Product roadmap with quarterly milestones
-3. `/docs/IMPLEMENTATION_PLAN.md` - Technical implementation history
-
 **TL;DR:** Redactyl is a specialized deep artifact scanner powered by Gitleaks. We scan container images, Helm charts, K8s manifests, and complex nested artifacts where traditional scanners can't reach.
+
+**Note:** AI context files (CLAUDE.md, AGENTS.md, .cursorrules, etc.) are not tracked in this repository. If you use AI-assisted development, you can create your own context files locally - they're already in .gitignore.
 
 ---
 
-## Current State (Q1 2025 Complete ✅)
+## Current State (v1.0.0 Production Ready ✅)
 
 ### What Works Today
 - ✅ Gitleaks-powered secret detection (via scanner interface)
@@ -38,7 +35,7 @@
 - 🎯 Performance optimization (caching, parallel scanning)
 
 ### Technology Stack
-- Go 1.25+
+- Go 1.25+ (required)
 - Gitleaks binary (detection engine)
 - OCI Image Spec v1 (container scanning)
 - Helm (chart scanning)
@@ -90,17 +87,15 @@ redactyl/
 │   ├── artifacts/        # 🌟 Core artifact streaming (keep & enhance)
 │   │   ├── artifacts.go  # Archive/container scanning
 │   │   └── ...
-│   ├── detectors/        # ❌ Custom detectors (will be removed)
+│   ├── audit/            # Audit logging
 │   ├── scanner/          # ✨ NEW: Scanner interface & Gitleaks integration
 │   ├── engine/           # Scan orchestration
 │   ├── config/           # Configuration management
 │   └── types/            # Shared types
 ├── pkg/core/             # Public Go API
 ├── docs/                 # Documentation
-│   ├── IMPLEMENTATION_PLAN.md  # Detailed dev plan
 │   └── deep-scanning.md        # Artifact scanning guide
-├── CLAUDE.md             # 🎯 Project context (read this!)
-└── ROADMAP.md            # Product roadmap
+└── test/                 # Test fixtures and integration tests
 ```
 
 ---
@@ -134,9 +129,6 @@ mkdir -p internal/registry
 touch internal/registry/client.go
 touch internal/registry/dockerhub.go
 touch internal/registry/gcr.go
-
-# Reference the roadmap
-less ROADMAP.md  # See Q2 Milestone 2.1
 ```
 
 **Key Technical Challenges:**
@@ -254,13 +246,12 @@ docker save alpine:latest > /tmp/alpine.tar
 ## Common Development Tasks
 
 ### Adding a New Feature
-1. Check if it aligns with `/ROADMAP.md` priorities
+1. Check GitHub issues for current priorities
 2. Create feature branch: `feature/short-description`
-3. Update `/CLAUDE.md` if it affects strategy
-4. Write tests first (TDD preferred)
-5. Implement feature
-6. Update documentation
-7. Open PR with clear description
+3. Write tests first (TDD preferred)
+4. Implement feature
+5. Update documentation
+6. Open PR with clear description
 
 ### Debugging
 ```bash
@@ -343,7 +334,7 @@ assert.Equal(t, expected, actual)
 
 ### Doc Locations
 - User-facing: `README.md`, `docs/*.md`
-- Developer-facing: `CLAUDE.md`, `CONTRIBUTING.md`, inline code comments
+- Developer-facing: `CONTRIBUTING.md`, inline code comments
 - API: `pkg/core/` (godoc comments)
 
 ---
@@ -443,9 +434,6 @@ go version  # Should be 1.25+
 ## Resources
 
 ### Internal Docs
-- `/CLAUDE.md` - Project strategy and context
-- `/ROADMAP.md` - Product roadmap
-- `/docs/IMPLEMENTATION_PLAN.md` - Technical implementation details
 - `/docs/deep-scanning.md` - Artifact scanning guide
 
 ### External References
@@ -463,19 +451,14 @@ go version  # Should be 1.25+
 
 ## Next Steps
 
-1. **Read strategic context:** `/CLAUDE.md`
-2. **Understand the plan:** `/ROADMAP.md` and `/docs/IMPLEMENTATION_PLAN.md`
-3. **Set up environment:** Install Go, Gitleaks, build project
-4. **Start coding:** Begin with Phase 1, Week 1 tasks
-5. **Ask questions:** Open GitHub discussion or check existing docs
-
-**Current Priority:** Gitleaks integration (Phase 1, Weeks 1-4)
+1. **Set up environment:** Install Go 1.25+, Gitleaks, build project
+2. **Pick an issue:** Check GitHub issues for good first issues
+3. **Ask questions:** Open GitHub discussion or check existing docs
 
 **Ready to start?**
 ```bash
-git checkout -b feature/gitleaks-integration
-mkdir -p internal/scanner/gitleaks
-# Start with scanner interface (see IMPLEMENTATION_PLAN.md)
+git checkout -b feature/your-feature
+make build && make test
 ```
 
 ---

@@ -6,11 +6,11 @@
 
 ## Type of Change
 <!-- Check one or more: -->
-- [ ] 🐛 **Bug fix** (non-breaking change which fixes an issue)
-- [ ] ✨ **New feature** (non-breaking change which adds functionality)
-- [ ] 🏗️ **Refactoring** (no functional change, significantly cleaner code)
-- [ ] 💥 **Breaking change** (fix or feature that would cause existing functionality to not work as expected)
-- [ ] 📖 **Documentation** (README, docs, comments)
+- [ ] **Bug fix** (non-breaking change which fixes an issue)
+- [ ] **New feature** (non-breaking change which adds functionality)
+- [ ] **Refactoring** (no functional change, significantly cleaner code)
+- [ ] **Breaking change** (fix or feature that would cause existing functionality to not work as expected)
+- [ ] **Documentation** (README, docs, comments)
 
 ## Motivation
 <!-- Why is this change required? What problem does it solve? -->

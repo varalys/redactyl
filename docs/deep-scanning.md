@@ -2,7 +2,7 @@
 
 This document explains how Redactyl scans archives, containers, Helm charts, Kubernetes manifests, and IaC hotspots without extracting to disk, how virtual paths work, the guardrails available, and performance tuning tips.
 
-**Last Updated:** 2025-10-28
+**Last Updated:** 2025-12-15
 
 ### Overview
 

@@ -623,7 +623,7 @@ Or use the [pre-commit framework](https://pre-commit.com):
 
 ```yaml
 - repo: https://github.com/redactyl/redactyl
-  rev: v0.1.0
+  rev: v1.0.0
   hooks:
     - id: redactyl-scan
 ```

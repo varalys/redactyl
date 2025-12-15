@@ -57,11 +57,6 @@ type Config struct {
 	GitleaksConfig config.GitleaksConfig
 }
 
-var (
-	EnableDetectors  string
-	DisableDetectors string
-)
-
 type pendingScan struct {
 	input    scanner.BatchInput
 	cacheKey string

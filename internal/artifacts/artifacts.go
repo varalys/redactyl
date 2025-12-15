@@ -27,6 +27,35 @@ func safeClose(c io.Closer) {
 	_ = c.Close() //nolint:errcheck
 }
 
+// sanitizeEntryName validates and cleans archive entry names to prevent
+// path traversal attacks. Returns empty string if the name is invalid.
+func sanitizeEntryName(name string) string {
+	// Reject entries containing null bytes
+	if strings.ContainsRune(name, 0) {
+		return ""
+	}
+
+	// Clean the path to normalize separators and resolve . and ..
+	cleaned := filepath.ToSlash(filepath.Clean(name))
+
+	// Strip leading slash for absolute paths within archive
+	cleaned = strings.TrimPrefix(cleaned, "/")
+
+	// Check for path traversal attempts after cleaning
+	// This catches cases like "foo/../../../etc/passwd" which Clean
+	// normalizes but still resolves to a traversal
+	if strings.HasPrefix(cleaned, "../") || strings.Contains(cleaned, "/../") || cleaned == ".." {
+		return ""
+	}
+
+	// Reject if cleaned path is empty
+	if cleaned == "" || cleaned == "." {
+		return ""
+	}
+
+	return cleaned
+}
+
 // Limits controls bounded deep scanning of artifacts like archives and containers.
 type Limits struct {
 	MaxArchiveBytes int64
@@ -176,17 +205,14 @@ func ScanContainersWithFilter(root string, limits Limits, allow PathAllowFunc, e
 			if nerr != nil {
 				return nil
 			}
-			name := hdr.Name
-			if hdr.FileInfo().IsDir() {
+			name := sanitizeEntryName(hdr.Name)
+			if name == "" || hdr.FileInfo().IsDir() {
 				continue
 			}
 			// layer tar entries have a path like "<layerID>/layer.tar"
-			if strings.HasSuffix(name, "/layer.tar") || strings.HasSuffix(name, "\\layer.tar") {
+			if strings.HasSuffix(name, "/layer.tar") {
 				layerID := filepath.Dir(name)
 				if i := strings.LastIndex(layerID, "/"); i >= 0 {
-					layerID = layerID[i+1:]
-				}
-				if i := strings.LastIndex(layerID, "\\"); i >= 0 {
 					layerID = layerID[i+1:]
 				}
 				// Limit reader to this entry size and hand off to tar reader using '/' join for layer path
@@ -253,17 +279,14 @@ func ScanContainersWithStats(root string, limits Limits, allow PathAllowFunc, em
 			if err != nil {
 				return nil
 			}
-			name := hdr.Name
-			if hdr.FileInfo().IsDir() {
+			name := sanitizeEntryName(hdr.Name)
+			if name == "" || hdr.FileInfo().IsDir() {
 				continue
 			}
 			// layer tar entries have a path like "<layerID>/layer.tar"
-			if strings.HasSuffix(name, "/layer.tar") || strings.HasSuffix(name, "\\layer.tar") {
+			if strings.HasSuffix(name, "/layer.tar") {
 				layerID := filepath.Dir(name)
 				if i := strings.LastIndex(layerID, "/"); i >= 0 {
-					layerID = layerID[i+1:]
-				}
-				if i := strings.LastIndex(layerID, "\\"); i >= 0 {
 					layerID = layerID[i+1:]
 				}
 				// Limit reader to this entry size and hand off to tar reader using '/' join for layer path
@@ -277,7 +300,6 @@ func ScanContainersWithStats(root string, limits Limits, allow PathAllowFunc, em
 }
 
 // ScanIaC scans IaC hotspots like Terraform state files and kubeconfigs.
-// Minimal placeholder: handled in a subsequent step.
 func ScanIaC(root string, limits Limits, emit func(path string, data []byte)) error {
 	return ScanIaCWithFilter(root, limits, nil, emit)
 }
@@ -484,7 +506,7 @@ func scanArchiveFile(fullPath string, rel string, limits Limits, decompressed *i
 			return nil
 		}
 		defer safeClose(gz)
-		name := gz.Name
+		name := sanitizeEntryName(gz.Name)
 		if name == "" {
 			name = strings.TrimSuffix(rel, ".gz")
 		}
@@ -535,7 +557,10 @@ func scanZipReader(archivePath string, limits Limits, decompressed *int64, entri
 			if readErr != nil {
 				continue
 			}
-			name := f.Name
+			name := sanitizeEntryName(f.Name)
+			if name == "" {
+				continue // Skip invalid/traversal entries
+			}
 			if looksBinary(b) || looksNonTextMIME(name, b) {
 				if depth < limits.MaxDepth && isArchivePath(name) {
 					_ = scanNestedArchive(archivePath+"::"+name, name, b, limits, decompressed, entries, depth+1, deadline, emit) //nolint:errcheck
@@ -577,7 +602,10 @@ func scanTarReaderJoin(archivePath string, sep string, limits Limits, decompress
 		if readErr != nil {
 			continue
 		}
-		name := hdr.Name
+		name := sanitizeEntryName(hdr.Name)
+		if name == "" {
+			continue // Skip invalid/traversal entries
+		}
 		if looksBinary(b) || looksNonTextMIME(name, b) {
 			if depth < limits.MaxDepth && isArchivePath(name) {
 				_ = scanNestedArchive(archivePath+sep+name, name, b, limits, decompressed, entries, depth+1, deadline, emit) //nolint:errcheck
@@ -614,7 +642,10 @@ func scanNestedArchive(pathChain string, name string, blob []byte, limits Limits
 			if readErr != nil {
 				continue
 			}
-			fname := f.Name
+			fname := sanitizeEntryName(f.Name)
+			if fname == "" {
+				continue // Skip invalid/traversal entries
+			}
 			if looksBinary(b) || looksNonTextMIME(fname, b) {
 				if depth < limits.MaxDepth && isArchivePath(fname) {
 					_ = scanNestedArchive(pathChain+"::"+fname, fname, b, limits, decompressed, entries, depth+1, deadline, emit) //nolint:errcheck
@@ -639,7 +670,7 @@ func scanNestedArchive(pathChain string, name string, blob []byte, limits Limits
 			return nil
 		}
 		defer safeClose(gz)
-		name := gz.Name
+		name := sanitizeEntryName(gz.Name)
 		if name == "" {
 			name = strings.TrimSuffix(filepath.Base(pathChain), ".gz")
 		}
@@ -931,7 +962,7 @@ func scanArchiveFileWithStats(fullPath string, rel string, limits Limits, decomp
 			return nil
 		}
 		defer safeClose(gz)
-		name := gz.Name
+		name := sanitizeEntryName(gz.Name)
 		if name == "" {
 			name = strings.TrimSuffix(rel, ".gz")
 		}
@@ -990,7 +1021,10 @@ func scanZipReaderWithStats(archivePath string, limits Limits, decompressed *int
 				}
 				continue
 			}
-			name := f.Name
+			name := sanitizeEntryName(f.Name)
+			if name == "" {
+				continue // Skip invalid/traversal entries
+			}
 			if looksBinary(b) || looksNonTextMIME(name, b) {
 				if depth < limits.MaxDepth && isArchivePath(name) {
 					_ = scanNestedArchiveWithStats(archivePath+"::"+name, name, b, limits, decompressed, entries, depth+1, deadline, emit, stats) //nolint:errcheck
@@ -1036,7 +1070,10 @@ func scanTarReaderWithStats(archivePath string, limits Limits, decompressed *int
 			}
 			continue
 		}
-		name := hdr.Name
+		name := sanitizeEntryName(hdr.Name)
+		if name == "" {
+			continue // Skip invalid/traversal entries
+		}
 		if looksBinary(b) || looksNonTextMIME(name, b) {
 			if depth < limits.MaxDepth && isArchivePath(name) {
 				_ = scanNestedArchiveWithStats(archivePath+"::"+name, name, b, limits, decompressed, entries, depth+1, deadline, emit, stats) //nolint:errcheck
@@ -1082,7 +1119,10 @@ func scanNestedArchiveWithStats(pathChain string, name string, blob []byte, limi
 				}
 				continue
 			}
-			fname := f.Name
+			fname := sanitizeEntryName(f.Name)
+			if fname == "" {
+				continue // Skip invalid/traversal entries
+			}
 			if looksBinary(b) || looksNonTextMIME(fname, b) {
 				if depth < limits.MaxDepth && isArchivePath(fname) {
 					_ = scanNestedArchiveWithStats(pathChain+"::"+fname, fname, b, limits, decompressed, entries, depth+1, deadline, emit, stats) //nolint:errcheck

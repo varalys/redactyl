@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project adheres to Semantic Versioning.
 
-## v1.0.0 - 2025-11-21
+## v1.0.0 - 2025-12-15
 
 ### Added
 - Deep artifact scanning (archives, containers, IaC hotspots)
@@ -22,7 +22,7 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 - Filtering
   - Artifact filenames now respect include/exclude globs (in addition to `.redactylignore`)
 - Docs & tooling
-  - README: deep scanning section updates; detectors list now auto‑generated via `redactyl gendocs`
+  - README: deep scanning section with comprehensive artifact scanning documentation
   - CI templates command: `redactyl ci init --provider {gitlab|bitbucket|azure}`
   - Public facade `pkg/core` exposing `Config`, `Finding`, and `Scan(cfg)`
   - JSON Schemas for findings and upload envelope under `docs/schemas/`
@@ -33,5 +33,5 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 - README/CONTRIBUTING updated with new usage and contributor guidance
 
 ### Fixed
-- Lint and docs workflow stability (errcheck/gocritic tidy ups; `gendocs` markers in README)
+- Lint and docs workflow stability (errcheck/gocritic tidy ups)
 - **Silent failures during deep artifact scanning are now reported in `Result.ArtifactErrors`.**
