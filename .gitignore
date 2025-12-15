@@ -47,8 +47,16 @@ redactyl-findings.json
 remediation.json
 purge.json
 
-# AI assistant context files (contributors may have their own)
+# AI assistant context files (contributors may generate their own)
 CLAUDE.md
+AGENTS.md
 GEMINI.md
+.cursorrules
+.github/copilot-instructions.md
 .gemini-clipboard/
+
+# Planning docs (not tracked)
 ROADMAP.md
+LAUNCH_TODO.md
+WEBSITE_PLAN.md
+DASHBOARD_PLAN.md

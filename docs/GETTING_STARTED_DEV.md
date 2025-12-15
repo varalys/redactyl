@@ -10,7 +10,7 @@
 
 **TL;DR:** Redactyl is a specialized deep artifact scanner powered by Gitleaks. We scan container images, Helm charts, K8s manifests, and complex nested artifacts where traditional scanners can't reach.
 
-**Note:** AI context files (CLAUDE.md, AGENTS.md, etc.) are not included by default. If you use AI-assisted development, you'll need to generate your own context files.
+**Note:** AI context files (CLAUDE.md, AGENTS.md, .cursorrules, etc.) are not tracked in this repository. If you use AI-assisted development, you can create your own context files locally - they're already in .gitignore.
 
 ---
 
