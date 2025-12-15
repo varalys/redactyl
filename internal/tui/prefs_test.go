@@ -13,34 +13,34 @@ func TestRedactSecret(t *testing.T) {
 		expect string
 	}{
 		{
-			name:   "long secret shows first 4 chars",
+			name:   "long secret shows first 6 chars",
 			input:  "ghp_SuperSecretToken12345",
-			expect: "ghp_***",
+			expect: "ghp_Su...",
 		},
 		{
-			name:   "exactly 5 chars shows first 4",
-			input:  "12345",
-			expect: "1234***",
+			name:   "exactly 7 chars shows first 6",
+			input:  "1234567",
+			expect: "123456...",
 		},
 		{
-			name:   "4 chars or less fully redacted",
-			input:  "1234",
-			expect: "***",
+			name:   "6 chars or less fully redacted",
+			input:  "123456",
+			expect: "...",
 		},
 		{
 			name:   "3 chars fully redacted",
 			input:  "abc",
-			expect: "***",
+			expect: "...",
 		},
 		{
 			name:   "empty string",
 			input:  "",
-			expect: "***",
+			expect: "...",
 		},
 		{
 			name:   "AWS key prefix preserved",
 			input:  "AKIA1234567890ABCDEF",
-			expect: "AKIA***",
+			expect: "AKIA12...",
 		},
 	}
 

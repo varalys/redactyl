@@ -70,11 +70,11 @@ func SavePrefs(prefs Prefs) error {
 }
 
 // redactSecret returns a redacted version of a secret string.
-// Shows first 4 characters followed by "***" for context.
+// Shows first 6 characters followed by "..." to indicate continuation.
 // Very short secrets are fully redacted.
 func redactSecret(s string) string {
-	if len(s) <= 4 {
-		return "***"
+	if len(s) <= 6 {
+		return "..."
 	}
-	return s[:4] + "***"
+	return s[:6] + "..."
 }
