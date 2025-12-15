@@ -2,7 +2,7 @@
 
 Thank you for your interest in contributing!
 
-- Use Go 1.23+.
+- Use Go 1.25+.
 - Run tests locally: `go test ./... -race`.
 - Lint: `golangci-lint run` (CI will run it too; see `.golangci.yml`).
 - Add tests for new detectors and features.
