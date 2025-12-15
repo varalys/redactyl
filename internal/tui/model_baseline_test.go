@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/redactyl/redactyl/internal/report"
@@ -58,10 +59,9 @@ func TestNewModelWithBaseline(t *testing.T) {
 		t.Error("second finding should be baselined")
 	}
 
-	// Verify status message reflects counts
-	expectedMsg := "1 new, 1 baselined"
-	if len(m.statusMessage) < len(expectedMsg) || m.statusMessage[:len(expectedMsg)] != expectedMsg {
-		t.Errorf("expected status to start with '%s', got: %s", expectedMsg, m.statusMessage)
+	// Status should show the standard legend
+	if !strings.Contains(m.statusMessage, "q: quit") {
+		t.Errorf("expected status to contain legend, got: %s", m.statusMessage)
 	}
 }
 
@@ -86,10 +86,9 @@ func TestNewModelWithBaseline_AllBaselined(t *testing.T) {
 	rescanFunc := func() ([]types.Finding, error) { return nil, nil }
 	m := NewModelWithBaseline(findings, baseline, rescanFunc)
 
-	// When all findings are baselined, status should reflect that
-	expectedMsg := "Showing 1 baselined findings"
-	if len(m.statusMessage) < len(expectedMsg) || m.statusMessage[:len(expectedMsg)] != expectedMsg {
-		t.Errorf("expected status to start with '%s', got: %s", expectedMsg, m.statusMessage)
+	// Status should show the standard legend (baseline counts shown in stats header)
+	if !strings.Contains(m.statusMessage, "q: quit") {
+		t.Errorf("expected status to contain legend, got: %s", m.statusMessage)
 	}
 }
 
