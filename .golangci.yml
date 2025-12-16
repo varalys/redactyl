@@ -94,6 +94,8 @@ issues:
       linters: [errcheck]
     - text: "Error return value of `.*\\.MarkDeprecated`"
       linters: [errcheck]
+    - text: "Error return value of `.*\\.MarkHidden`"
+      linters: [errcheck]
     - text: "Error return value of `doublestar\\.Match`"
       linters: [errcheck]
     - text: "Error return value of `filepath\\.WalkDir`"
