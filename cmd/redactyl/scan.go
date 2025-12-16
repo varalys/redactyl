@@ -52,6 +52,7 @@ var (
 	flagJSONExtended bool
 	flagNoTUI        bool
 	flagViewLast     bool
+	flagDemo         bool
 
 	flagRegistryImages []string
 )
@@ -67,6 +68,8 @@ func init() {
 	cmd.Flags().StringVarP(&flagPath, "path", "p", ".", "path to scan")
 	cmd.Flags().BoolVar(&flagNoTUI, "no-tui", false, "disable interactive TUI mode (for CI/CD or piping output)")
 	cmd.Flags().BoolVar(&flagViewLast, "view-last", false, "view last scan results in TUI without rescanning")
+	cmd.Flags().BoolVar(&flagDemo, "demo", false, "launch TUI with sample data (for screenshots/demos)")
+	_ = cmd.Flags().MarkHidden("demo")
 
 	// Backward compatibility: -i now does nothing (TUI is default), but keep flag to avoid breaking existing scripts
 	var flagInteractiveDeprecated bool
@@ -179,6 +182,14 @@ func runScan(cmd *cobra.Command, _ []string) error {
 			return nil, fmt.Errorf("rescan not available in view-only mode - exit and run 'redactyl scan -i' to rescan")
 		}
 		return tui.RunCachedWithBaseline(results.Findings, baseline, rescanFunc, results.Timestamp)
+	}
+
+	if flagDemo {
+		findings := generateDemoFindings()
+		rescanFunc := func() ([]types.Finding, error) {
+			return findings, nil // Just return same demo data
+		}
+		return tui.Run(findings, rescanFunc)
 	}
 
 	var gcfg, lcfg config.FileConfig
@@ -468,4 +479,101 @@ func activeSetSummary(cfg engine.Config) string {
 		ids = kept
 	}
 	return strings.Join(ids, ",")
+}
+
+// generateDemoFindings creates sample findings for demo/screenshot purposes.
+// Each finding includes realistic code context and metadata for display in the TUI.
+func generateDemoFindings() []types.Finding {
+	return []types.Finding{
+		{
+			Path: "src/config/database.go", Detector: "aws-access-key", Line: 45, Column: 15, Severity: types.SevHigh,
+			Match:    "AKIAIOSFODNN7EXAMPLE",
+			Context:  "func connectDB() (*sql.DB, error) {\n    accessKey := \"AKIAIOSFODNN7EXAMPLE\"\n    secretKey := os.Getenv(\"AWS_SECRET\")",
+			Metadata: map[string]string{"entropy": "4.25", "gitleaks_rule_id": "aws-access-key", "commit": "a1b2c3d", "author": "dev@example.com", "date": "2025-01-15"},
+		},
+		{
+			Path: "src/config/database.go", Detector: "aws-secret-key", Line: 46, Column: 15, Severity: types.SevHigh,
+			Match:    "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLE",
+			Context:  "    accessKey := os.Getenv(\"AWS_ACCESS\")\n    secretKey := \"wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLE\"\n    return sql.Open(\"postgres\", dsn)",
+			Metadata: map[string]string{"entropy": "5.12", "gitleaks_rule_id": "aws-secret-key", "commit": "a1b2c3d", "author": "dev@example.com", "date": "2025-01-15"},
+		},
+		{
+			Path: "deploy/k8s/secrets.yaml", Detector: "github-pat", Line: 18, Column: 14, Severity: types.SevHigh,
+			Match:    "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+			Context:  "apiVersion: v1\nkind: Secret\ndata:\n  GITHUB_TOKEN: ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+			Metadata: map[string]string{"entropy": "4.78", "gitleaks_rule_id": "github-pat", "commit": "b2c3d4e", "author": "ops@example.com", "date": "2025-02-20"},
+		},
+		{
+			Path: "deploy/k8s/secrets.yaml", Detector: "jwt-token", Line: 24, Column: 10, Severity: types.SevHigh,
+			Match:    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWI",
+			Context:  "metadata:\n  name: api-secrets\nstringData:\n  JWT_SECRET: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWI",
+			Metadata: map[string]string{"entropy": "4.95", "gitleaks_rule_id": "jwt-token", "commit": "b2c3d4e", "author": "ops@example.com", "date": "2025-02-20"},
+		},
+		{
+			Path: "deploy/docker-compose.yml", Detector: "stripe-key", Line: 32, Column: 18, Severity: types.SevHigh,
+			Match:    "sk_live_4eC39HqLyjWDarjtT1zdp7dc",
+			Context:  "services:\n  api:\n    environment:\n      - STRIPE_KEY=sk_live_4eC39HqLyjWDarjtT1zdp7dc",
+			Metadata: map[string]string{"entropy": "4.67", "gitleaks_rule_id": "stripe-api-key", "commit": "c3d4e5f", "author": "dev@example.com", "date": "2025-03-10"},
+		},
+		{
+			Path: ".env.production", Detector: "openai-key", Line: 12, Column: 1, Severity: types.SevHigh,
+			Match:    "sk-proj-abc123def456ghi789jkl012mno345",
+			Context:  "# API Keys\nDATABASE_URL=postgres://...\nOPENAI_API_KEY=sk-proj-abc123def456ghi789jkl012mno345\nREDIS_URL=redis://...",
+			Metadata: map[string]string{"entropy": "4.89", "gitleaks_rule_id": "openai-api-key", "commit": "d4e5f6g", "author": "admin@example.com", "date": "2025-03-15"},
+		},
+		{
+			Path: ".env.production", Detector: "stripe-key", Line: 15, Column: 1, Severity: types.SevHigh,
+			Match:    "sk_live_abc123xyz789def456ghi012jkl",
+			Context:  "OPENAI_API_KEY=sk-...\nSENDGRID_KEY=SG...\nSTRIPE_SECRET_KEY=sk_live_abc123xyz789def456ghi012jkl\nSENTRY_DSN=https://...",
+			Metadata: map[string]string{"entropy": "4.72", "gitleaks_rule_id": "stripe-api-key", "commit": "d4e5f6g", "author": "admin@example.com", "date": "2025-03-15"},
+		},
+		{
+			Path: "src/services/auth.ts", Detector: "private-key", Line: 89, Column: 5, Severity: types.SevHigh,
+			Match:    "-----BEGIN RSA PRIVATE KEY-----",
+			Context:  "const privateKey = `-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA2Z3qX2BTLS4e...\n-----END RSA PRIVATE KEY-----`;",
+			Metadata: map[string]string{"entropy": "5.45", "gitleaks_rule_id": "private-key", "commit": "e5f6g7h", "author": "security@example.com", "date": "2025-01-08"},
+		},
+		{
+			Path: "src/services/payment.go", Detector: "square-key", Line: 156, Column: 22, Severity: types.SevMed,
+			Match:    "sq0csp-xxxxxxxxxxxxxxxxxxxxxxxx",
+			Context:  "func initSquare() {\n    client := square.NewClient(\n        square.WithAccessToken(\"sq0csp-xxxxxxxxxxxxxxxxxxxxxxxx\"),\n    )",
+			Metadata: map[string]string{"entropy": "3.85", "gitleaks_rule_id": "square-access-token", "commit": "f6g7h8i", "author": "dev@example.com", "date": "2025-02-28"},
+		},
+		{
+			Path: "scripts/deploy.sh", Detector: "docker-token", Line: 8, Column: 1, Severity: types.SevMed,
+			Match:    "dckr_pat_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+			Context:  "#!/bin/bash\nset -e\n\nexport DOCKER_TOKEN=dckr_pat_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx\ndocker login -u user -p $DOCKER_TOKEN",
+			Metadata: map[string]string{"entropy": "4.15", "gitleaks_rule_id": "docker-pat", "commit": "g7h8i9j", "author": "ops@example.com", "date": "2025-03-01"},
+		},
+		{
+			Path: "terraform/main.tf", Detector: "github-pat", Line: 42, Column: 12, Severity: types.SevMed,
+			Match:    "github_pat_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+			Context:  "provider \"github\" {\n  owner = \"myorg\"\n  token = \"github_pat_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"\n}",
+			Metadata: map[string]string{"entropy": "4.33", "gitleaks_rule_id": "github-pat", "commit": "h8i9j0k", "author": "infra@example.com", "date": "2025-02-14"},
+		},
+		{
+			Path: "helm/values.yaml", Detector: "slack-token", Line: 67, Column: 10, Severity: types.SevMed,
+			Match:    "xoxb-xxxxxxxxxxxx-xxxxxxxxxxxxxxxx",
+			Context:  "notifications:\n  slack:\n    enabled: true\n    apiKey: xoxb-xxxxxxxxxxxx-xxxxxxxxxxxxxxxx\n    channel: \"#alerts\"",
+			Metadata: map[string]string{"entropy": "4.02", "gitleaks_rule_id": "slack-bot-token", "commit": "i9j0k1l", "author": "ops@example.com", "date": "2025-03-05"},
+		},
+		{
+			Path: "src/utils/logger.go", Detector: "datadog-key", Line: 23, Column: 8, Severity: types.SevMed,
+			Match:    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+			Context:  "func initDatadog() {\n    apiKey := \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"\n    tracer.Start(tracer.WithAgentAddr(apiKey))\n}",
+			Metadata: map[string]string{"entropy": "3.78", "gitleaks_rule_id": "datadog-api-key", "commit": "j0k1l2m", "author": "dev@example.com", "date": "2025-01-22"},
+		},
+		{
+			Path: "docs/setup.md", Detector: "generic-api-key", Line: 45, Column: 8, Severity: types.SevLow,
+			Match:    "test_key_example_12345",
+			Context:  "```bash\n# For local development only\nexport API_KEY=test_key_example_12345\nnpm run dev\n```",
+			Metadata: map[string]string{"entropy": "3.21", "gitleaks_rule_id": "generic-api-key", "commit": "k1l2m3n", "author": "docs@example.com", "date": "2025-02-01"},
+		},
+		{
+			Path: "examples/config.json", Detector: "password", Line: 12, Column: 17, Severity: types.SevLow,
+			Match:    "changeme123",
+			Context:  "{\n  \"database\": {\n    \"host\": \"localhost\",\n    \"password\": \"changeme123\"\n  }\n}",
+			Metadata: map[string]string{"entropy": "2.95", "gitleaks_rule_id": "generic-password", "commit": "l2m3n4o", "author": "dev@example.com", "date": "2025-01-05"},
+		},
+	}
 }

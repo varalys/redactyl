@@ -275,11 +275,8 @@ func NewModel(findings []types.Finding, rescanFunc func() ([]types.Finding, erro
 		expandedGroups:   make(map[string]bool),
 	}
 
-	if m.showEmpty {
-		m.statusMessage = "q: quit | r: rescan | a: audit log"
-	} else {
-		m.statusMessage = "q: quit | ?: help | j/k: navigate | o: open | r: rescan | *: toggle secrets"
-	}
+	// Default legend - will be updated with actual width on WindowSizeMsg
+	m.statusMessage = buildLegend(80, m.showEmpty, m.hideSecrets)
 
 	return m
 }
@@ -322,11 +319,8 @@ func NewModelWithBaseline(findings []types.Finding, baseline report.Baseline, re
 	}
 	m.table.SetRows(rows)
 
-	if len(findings) > 0 && newCount == 0 {
-		m.statusMessage = fmt.Sprintf("Showing %d baselined findings | q: quit | ?: help | r: rescan | a: audit log", len(findings))
-	} else if newCount < len(findings) {
-		m.statusMessage = fmt.Sprintf("%d new, %d baselined | q: quit | ?: help | j/k: navigate | o: open | i: ignore | b: baseline | a: audit", newCount, len(findings)-newCount)
-	}
+	// Legend will be set properly on first WindowSizeMsg, use default for now
+	// The baseline counts are shown in the stats header instead
 
 	return m
 }
@@ -1080,17 +1074,40 @@ func (m *Model) updateViewportContentForFinding(f types.Finding) {
 		b.WriteString(fmt.Sprintf("%s %s\n", keyStyle.Render("Secret:"), secretDisplay))
 	}
 	if len(f.Metadata) > 0 {
-		b.WriteString(fmt.Sprintf("%s\n", keyStyle.Render("Metadata:")))
-		for k, v := range f.Metadata {
-			b.WriteString(fmt.Sprintf("  %s: %s\n", lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render(k), v))
+		// Filter out commit-related keys (shown separately)
+		skipKeys := map[string]bool{"commit": true, "author": true, "date": true}
+		var hasDisplayable bool
+		for k := range f.Metadata {
+			if !skipKeys[k] {
+				hasDisplayable = true
+				break
+			}
+		}
+		if hasDisplayable {
+			b.WriteString(fmt.Sprintf("%s\n", keyStyle.Render("Metadata:")))
+			for k, v := range f.Metadata {
+				if !skipKeys[k] {
+					b.WriteString(fmt.Sprintf("  %s: %s\n", lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render(k), v))
+				}
+			}
 		}
 	}
 
 	if !isVirtual {
+		commitStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
 		if blame := getGitBlame(f.Path, f.Line); blame != nil {
-			commitStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
 			commitText := fmt.Sprintf("%s (%s, %s)", blame.Commit, blame.Author, blame.Date)
 			b.WriteString(fmt.Sprintf("%s %s\n", keyStyle.Render("Commit:"), commitStyle.Render(commitText)))
+		} else if f.Metadata != nil {
+			// Fallback to metadata for commit info (used in demo mode)
+			if commit, ok := f.Metadata["commit"]; ok {
+				author := f.Metadata["author"]
+				date := f.Metadata["date"]
+				if author != "" && date != "" {
+					commitText := fmt.Sprintf("%s (%s, %s)", commit, author, date)
+					b.WriteString(fmt.Sprintf("%s %s\n", keyStyle.Render("Commit:"), commitStyle.Render(commitText)))
+				}
+			}
 		}
 	}
 
@@ -1701,6 +1718,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateViewportContent()
 		statusStyle = statusStyle.Width(m.width)
 
+		// Update legend with new width (only if no temporary message)
+		if m.statusTimeout == nil {
+			m.statusMessage = buildLegend(m.width, m.showEmpty, m.hideSecrets)
+		}
+
 	case findingsMsg:
 		m.findings = msg
 		m.showEmpty = len(m.findings) == 0
@@ -1746,11 +1768,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spinner, spinCmd = m.spinner.Update(msg)
 		if m.statusTimeout != nil && time.Now().After(*m.statusTimeout) {
 			m.statusTimeout = nil
-			if m.showEmpty {
-				m.statusMessage = "q: quit | r: rescan"
-			} else {
-				m.statusMessage = "q: quit | ?: help | j/k: navigate | o: open | r: rescan | *: toggle secrets"
-			}
+			m.statusMessage = buildLegend(m.width, m.showEmpty, m.hideSecrets)
 		}
 		return m, spinCmd
 	}
@@ -2218,4 +2236,52 @@ func (m Model) View() string {
 	}
 
 	return mainView
+}
+
+// buildLegend creates a responsive legend bar that adapts to terminal width.
+// Items are added in priority order until width is exhausted.
+func buildLegend(width int, showEmpty bool, hideSecrets bool) string {
+	if showEmpty {
+		return "q: quit | r: rescan | a: audit log"
+	}
+
+	// Show action that will happen when pressed
+	secretsLabel := "*: show"
+	if !hideSecrets {
+		secretsLabel = "*: hide"
+	}
+
+	// Legend items in priority order (most important first)
+	items := []string{
+		"q: quit",
+		"?: help",
+		"j/k: nav",
+		"i: ignore",
+		"b: baseline",
+		"r: rescan",
+		secretsLabel,
+		"a: audit",
+	}
+
+	separator := " | "
+	sepLen := len(separator)
+	available := width - 4 // padding
+
+	var result []string
+	usedWidth := 0
+
+	for _, item := range items {
+		itemLen := len(item)
+		needed := itemLen
+		if len(result) > 0 {
+			needed += sepLen
+		}
+
+		if usedWidth+needed <= available {
+			result = append(result, item)
+			usedWidth += needed
+		}
+	}
+
+	return strings.Join(result, separator)
 }

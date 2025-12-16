@@ -363,6 +363,8 @@ redactyl detectors
 
 Redactyl provides a rich terminal user interface (TUI) for interactive secret scanning and management.
 
+![Redactyl TUI](docs/images/tui-screenshot.png)
+
 ### Features
 
 - **Visual findings table** - Color-coded severity (High/Medium/Low)

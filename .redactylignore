@@ -24,3 +24,6 @@ test/integration/**
 
 # documentation with example tokens
 docs/rules/**
+
+# demo data (contains example secrets for screenshots)
+cmd/redactyl/scan.go
