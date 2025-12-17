@@ -46,6 +46,7 @@ Secrets don't just live in Git history - they hide in **container images, Helm c
 - [Public Go API](#public-go-api)
 - [Updates & Changelog](#updates--changelog)
 - [Versioning & Compatibility](#versioning--compatibility)
+- [Acknowledgments](#acknowledgments)
 - [Contributing](#contributing)
 - [Enterprise](#enterprise)
 
