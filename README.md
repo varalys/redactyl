@@ -670,6 +670,10 @@ Semantic Versioning (SemVer):
 - **Rule IDs:** stable; renames or removals are major. New rule IDs may be added in any minor.
 - **Public Go API (`pkg/core`)**: follows SemVer; breaking changes require a major version.
 
+## Acknowledgments
+
+Built with [Gitleaks](https://github.com/gitleaks/gitleaks) for secret detection, [Bubbletea](https://github.com/charmbracelet/bubbletea) and the [Charm](https://charm.sh) stack for the TUI, [go-containerregistry](https://github.com/google/go-containerregistry) for OCI support, [go-git](https://github.com/go-git/go-git) for Git operations, and [Chroma](https://github.com/alecthomas/chroma) for syntax highlighting.
+
 ## License
 
 Apache‑2.0. See [`LICENSE`](LICENSE).
