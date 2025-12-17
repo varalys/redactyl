@@ -49,7 +49,7 @@ nfpms:
   - id: default
     package_name: redactyl
     formats: [deb, rpm, apk]
-    maintainer: Franz <you@example.com>
+    maintainer: maintainer: Franz <maintainer@redactyl.io>
     description: Find secrets in your repo with low noise.
     license: Apache-2.0
     homepage: https://github.com/redactyl/redactyl
