@@ -18,12 +18,12 @@ Redactyl focuses on **artifact intelligence** while Gitleaks handles **pattern m
 │  │ - IaC files (tfstate, kubeconfig) │  │
 │  └────────────┬──────────────────────┘  │
 │               │ Extract & stream files  │
-│               ▼                          │
+│               ▼                         │
 │  ┌───────────────────────────────────┐  │
 │  │ Virtual Path Tracking             │  │
 │  │ chart.tgz::templates/secret.yaml  │  │
 │  └────────────┬──────────────────────┘  │
-└───────────────┼──────────────────────────┘
+└───────────────┼─────────────────────────┘
                 │ Pass content to scanner
                 ▼
 ┌─────────────────────────────────────────┐
@@ -36,12 +36,12 @@ Redactyl focuses on **artifact intelligence** while Gitleaks handles **pattern m
 │  │ - Database credentials            │  │
 │  │ - API keys and secrets            │  │
 │  └────────────┬──────────────────────┘  │
-│               │ Return findings          │
-│               ▼                          │
+│               │ Return findings         │
+│               ▼                         │
 │  ┌───────────────────────────────────┐  │
 │  │ JSON output with metadata         │  │
 │  └────────────┬──────────────────────┘  │
-└───────────────┼──────────────────────────┘
+└───────────────┼─────────────────────────┘
                 │ Parse findings
                 ▼
 ┌─────────────────────────────────────────┐
