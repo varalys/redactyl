@@ -1661,6 +1661,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "g":
 			m.pendingKey = "g"
+			timeout := time.Now().Add(3 * time.Second)
+			m.statusTimeout = &timeout
+			m.statusMessage = "Pending command: g... (f: file, d: detector, g: top)"
 			return m, nil
 		case "home":
 			if !m.showEmpty {
