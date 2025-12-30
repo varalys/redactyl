@@ -4,6 +4,11 @@
 
   The format is based on Keep a Changelog and this project adheres to Semantic Versioning.
 
+  ## v1.0.2 - 2025-12-30
+
+  ### Changed
+  - Migrate GitHub repository from `redactyl/redactyl` to `varalys/redactyl`
+
   ## v1.0.1 - 2025-12-17
 
   ### Security
