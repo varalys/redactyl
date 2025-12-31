@@ -52,13 +52,17 @@ Secrets don't just live in Git history - they hide in **container images, Helm c
 
 ## Installation
 
-> If you built locally, replace `redactyl` with `./bin/redactyl` in all commands below.
+**Homebrew (macOS/Linux):**
 
-Build from source (repo root):
+```sh
+brew install varalys/tap/redactyl
+```
+
+**Build from source:**
 
 ```sh
 make build
-redactyl --help
+./bin/redactyl --help
 ```
 
 Or with Go directly:

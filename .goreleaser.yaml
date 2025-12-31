@@ -50,6 +50,7 @@ brews:
     repository:
       owner: varalys
       name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     directory: Formula
     homepage: "https://github.com/varalys/redactyl"
     description: "Deep artifact scanner for secrets in containers, Helm charts, and K8s manifests"
