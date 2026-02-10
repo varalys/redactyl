@@ -14,13 +14,13 @@ Powered by [Gitleaks](https://github.com/gitleaks/gitleaks) for detection, enhan
 
 ## Why Redactyl?
 
-Secrets don't just live in Git history - they hide in **container images, Helm charts, CI/CD artifacts, and nested archives** where traditional scanners can't reach them. Redactyl finds secrets in complex cloud-native artifacts without extracting them to disk.
+Secrets don't just live in Git history, they hide in **container images, Helm charts, CI/CD artifacts, and nested archives**.  Redactyl finds secrets in complex cloud-native artifacts without extracting them to disk.
 
 **Key differentiators:**
 - **Deep artifact scanning** - Stream archives, containers, Helm charts, and K8s manifests without disk extraction
 - **Virtual paths** - Track secrets through nested artifacts: `chart.tgz::templates/secret.yaml::line-123`
 - **Powered by Gitleaks** - Uses Gitleaks' detection engine; we focus on artifact intelligence
-- **Privacy-first** - Zero telemetry; self-hosted friendly
+- **Privacy-first** - Zero telemetry; self-hosted
 - **Complete remediation** - Forward fixes and history rewriting with safety guardrails
 
 ## Installation
@@ -215,7 +215,3 @@ Apache-2.0. See [LICENSE](LICENSE).
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). To add detection rules, contribute to [Gitleaks](https://github.com/gitleaks/gitleaks) or create custom rules in `.gitleaks.toml`.
-
-## Enterprise
-
-Commercial offerings (dashboard, policies, SSO) available. Open a GitHub Discussion titled "Enterprise inquiry".
