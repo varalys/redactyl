@@ -4,6 +4,11 @@ dist/
 build/
 out/
 
+# compiled binaries (root-anchored so package dirs aren't ignored)
+/redactyl
+/redactyl_tui
+/redactyl_test
+
 # editor/OS files
 .DS_Store
 *.swp
