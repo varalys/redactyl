@@ -38,7 +38,10 @@ jobs:
       - name: Run tests with race and coverage (internal packages)
         run: |
           PKGS=$(go list ./internal/... | tr '\n' ',')
-          go test -race -count=1 -coverpkg "$PKGS" -coverprofile=cover.out ./internal/...
+          # -short skips tests that hit the live GitHub API (gitleaks binary
+          # download), which flake on shared CI runners due to anonymous rate
+          # limiting. The real download path is exercised by the integration suite.
+          go test -short -race -count=1 -coverpkg "$PKGS" -coverprofile=cover.out ./internal/...
           go tool cover -func=cover.out | tee cover.txt
       - name: Enforce coverage threshold
         run: |
