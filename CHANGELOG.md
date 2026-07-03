@@ -4,6 +4,17 @@
 
   The format is based on Keep a Changelog and this project adheres to Semantic Versioning.
 
+  ## v1.0.3 - 2026-07-03
+
+  ### Security
+  - Bump `go-git` from v5.16.2 to v5.19.1, resolving three reachable vulnerabilities in idx/pack file handling (GO-2026-4910, GO-2026-4909, GO-2026-4473). `govulncheck ./...` now reports no reachable vulnerabilities.
+
+  ### Changed
+  - Sweep dependencies to latest, including `charmbracelet/bubbles` (v0.21.0 to v1.0.0), `alecthomas/chroma` (v2.20.0 to v2.27.0), `google/go-containerregistry` (v0.20.7 to v0.21.7), `spf13/cobra` (v1.10.1 to v1.10.2), and `olekukonko/tablewriter` (v1.0.9 to v1.1.4). Moved off the retracted `klauspost/compress` v1.18.1 to v1.19.0.
+
+  ### Fixed
+  - Remove stray compiled binaries from the repository root and gitignore them.
+
   ## v1.0.2 - 2025-12-30
 
   ### Changed

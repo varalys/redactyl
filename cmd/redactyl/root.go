@@ -20,7 +20,7 @@ var (
 	flagNoUpdateCheck   bool
 	flagSelfUpdate      bool
 
-	version = "1.0.1"
+	version = "1.0.3"
 )
 
 var rootCmd = &cobra.Command{
